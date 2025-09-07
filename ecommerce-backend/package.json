@@ -1,0 +1,38 @@
+{
+  "name": "ecommerce-backend",
+  "version": "1.0.0",
+  "description": "Backend for e-commerce application using Node.js, Express, and MongoDB.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "bcrypt": "^5.0.1",
+    "cloudinary": "^1.27.0",
+    "cors": "^2.8.5",
+    "dotenv": "^10.0.0",
+    "express": "^4.17.1",
+    "express-rate-limit": "^5.2.6",
+    "helmet": "^4.6.0",
+    "jsonwebtoken": "^8.5.1",
+    "joi": "^17.4.0",
+    "mongoose": "^5.12.3",
+    "nodemailer": "^6.6.3",
+  "winston": "^3.3.3",
+  "twilio": "^4.0.0"
+  },
+  "devDependencies": {
+    "jest": "^27.0.6",
+    "nodemon": "^2.0.12"
+  },
+  "keywords": [
+    "ecommerce",
+    "nodejs",
+    "express",
+    "mongodb"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

@@ -1,0 +1,31 @@
+const dotenv = require('dotenv');
+
+dotenv.config();
+
+const config = {
+  PORT: process.env.PORT || 5000,
+  DB_URI: process.env.DB_URI,
+  JWT_SECRET: process.env.JWT_SECRET,
+  SMTP_HOST: process.env.SMTP_HOST,
+  SMTP_PORT: process.env.SMTP_PORT,
+  SMTP_USER: process.env.SMTP_USER,
+  SMTP_PASS: process.env.SMTP_PASS,
+  EMAIL_FROM: process.env.EMAIL_FROM,
+  ADMIN_EMAIL: process.env.ADMIN_EMAIL,
+  ADMIN_PHONE: process.env.ADMIN_PHONE,
+  FRONTEND_URL: process.env.FRONTEND_URL,
+  CLOUDINARY_URL: process.env.CLOUDINARY_URL,
+  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
+  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
+  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
+  GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY,
+  TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
+  TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
+  TWILIO_FROM: process.env.TWILIO_FROM,
+  SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
+  SENDGRID_TEMPLATE_ORDER: process.env.SENDGRID_TEMPLATE_ORDER,
+  SENDGRID_TEMPLATE_ADMIN: process.env.SENDGRID_TEMPLATE_ADMIN,
+  NOMINATIM_EMAIL: process.env.NOMINATIM_EMAIL,
+};
+
+module.exports = config;
