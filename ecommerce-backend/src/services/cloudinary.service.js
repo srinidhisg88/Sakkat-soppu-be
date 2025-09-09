@@ -1,20 +1,22 @@
 const cloudinary = require('cloudinary').v2;
+const config=require('../config/index')
 let CloudinaryStorage;
 let multer;
 try {
   CloudinaryStorage = require('multer-storage-cloudinary').CloudinaryStorage || require('multer-storage-cloudinary');
   multer = require('multer');
+
 } catch (err) {
   // optional dependency might be missing in dev/test environments
+  
   CloudinaryStorage = null;
   multer = null;
 }
 
-// Configure Cloudinary
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: config.CLOUDINARY_CLOUD_NAME,
+  api_key: config.CLOUDINARY_API_KEY,
+  api_secret: config.CLOUDINARY_API_SECRET,
 });
 
 let upload = null;
@@ -41,6 +43,7 @@ const uploadImage = (req, res, next) => {
 
 // helper to create multer.fields middleware for multiple file fields like images/videos
 const uploadFields = (fields) => {
+  
   if (!upload) {
     return (req, res, next) => next(new Error('File upload not configured. Install multer-storage-cloudinary and set CLOUDINARY_* env vars.'));
   }

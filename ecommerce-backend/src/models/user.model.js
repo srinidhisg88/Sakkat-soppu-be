@@ -39,6 +39,13 @@ const userSchema = new mongoose.Schema({
             quantity: { type: Number, default: 1, min: 1 },
         }
     ],
+    // Password reset token and expiry
+    resetPasswordToken: {
+        type: String,
+    },
+    resetPasswordExpires: {
+        type: Date,
+    },
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {

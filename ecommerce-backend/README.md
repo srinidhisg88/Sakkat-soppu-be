@@ -31,6 +31,7 @@ Additionally, farmers are first-class actors in the system: admins create farmer
 - Email notifications sent to users upon order confirmation.
 - Admins receive email + SMS notifications for new/confirmed orders with location link.
 - Newly created farmers receive their temporary credentials via email (and optionally SMS) when an admin creates an account.
+- Email is powered by SendGrid dynamic templates (no SMTP fallback).
 
 ## Security & Middleware
 - CORS enabled with a whitelist for the frontend domain.
@@ -49,7 +50,7 @@ Additionally, farmers are first-class actors in the system: admins create farmer
 ### Prerequisites
 - Node.js (16+)
 - MongoDB Atlas or local MongoDB
-- SMTP service (Gmail/SendGrid)
+- SendGrid account + dynamic templates for emails
 - Twilio account for SMS (optional)
 
 ### Installation
@@ -80,7 +81,9 @@ npm start
 The application will run on the configured `PORT` (default 3000).
 
 ### API Summary
-- Auth: `POST /api/auth/signup`, `POST /api/auth/login`
+- Auth: `POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/logout`
+- Password reset: `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`
+- Admin Auth: `POST /api/auth/admin/signup` (requires ADMIN_SIGNUP_CODE), `POST /api/auth/admin/login`
 - Products: `GET /api/products`, `POST /api/products`, `PUT /api/products/:id`, `DELETE /api/products/:id`
 - Orders: `POST /api/orders` (user), `GET /api/orders` (user), `PUT /api/orders/:orderId/status` (admin)
 - Farmer: `GET /api/farmer/profile`, `PUT /api/farmer/profile`, `POST /api/farmer/products`
@@ -94,13 +97,14 @@ PORT=3000
 DB_URI=mongodb+srv://<user>:<pass>@cluster0.mongodb.net/sakkat-soppu
 JWT_SECRET=very_secure_secret
 FRONTEND_URL=https://your-frontend.example.com
+COOKIE_DOMAIN=.yourdomain.com
 
-# SMTP
-SMTP_HOST=smtp.sendgrid.net
-SMTP_PORT=587
-SMTP_USER=apikey
-SMTP_PASS=<sendgrid-api-key>
+# Email (SendGrid only)
 EMAIL_FROM="Sakkat Soppu <no-reply@sakkatsoppu.com>"
+SENDGRID_API_KEY=your_sendgrid_api_key
+SENDGRID_TEMPLATE_ORDER=d-sendgrid-order-template
+SENDGRID_TEMPLATE_ADMIN=d-sendgrid-admin-template
+SENDGRID_TEMPLATE_PASSWORD_RESET=d-sendgrid-reset-template
 
 # Twilio (optional)
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -117,6 +121,7 @@ CLOUDINARY_API_SECRET=...
 GOOGLE_MAPS_API_KEY=...
 
 ADMIN_EMAIL=admin@sakkatsoppu.com
+ADMIN_SIGNUP_CODE=set_a_secure_admin_code
 ```
 
 ## Running tests

@@ -3,94 +3,236 @@ const User = require('../models/user.model');
 const Product = require('../models/product.model');
 const { sendOrderConfirmation, sendNewOrderNotification } = require('../services/email.service');
 
-// Create a new order
-exports.createOrder = async (req, res) => {
-    const { items, totalPrice, address, latitude, longitude } = req.body;
-    const userId = req.user.id;
-
+// Admin: list all orders with optional filters and pagination
+exports.getAllOrders = async (req, res) => {
     try {
-        // Use user's saved location if not provided
-        const user = await User.findById(userId);
-        const orderLat = latitude ?? user.latitude;
-        const orderLng = longitude ?? user.longitude;
+        const {
+            status,
+            userId,
+            from, // ISO date string
+            to,   // ISO date string
+            page = 1,
+            limit = 20,
+            sort = '-createdAt',
+        } = req.query;
 
-        // Check stock atomically and decrement using findOneAndUpdate
-    for (const item of items) {
-            const updated = await Product.findOneAndUpdate(
-                { _id: item.productId, stock: { $gte: item.quantity } },
-                { $inc: { stock: -item.quantity } },
-                { new: true }
-            );
+        const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+        const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
-            if (!updated) {
-                return res.status(400).json({ message: `Insufficient stock for product ${item.productId}` });
-            }
-            // ensure price recorded per item
-            item.price = updated.price;
-            // attach product name for email/template readability
-            item.name = updated.name || item.name || `product-${item.productId}`;
+        const filter = {};
+        if (status) filter.status = status;
+        if (userId) filter.userId = userId;
+        if (from || to) {
+            filter.createdAt = {};
+            if (from) filter.createdAt.$gte = new Date(from);
+            if (to) filter.createdAt.$lte = new Date(to);
         }
 
-        // Prefer device-provided coordinates (frontend should send latitude & longitude when available).
-        // Fall back to user's saved coordinates if not provided.
-        const resolvedLat = latitude ?? user.latitude ?? null;
-        const resolvedLng = longitude ?? user.longitude ?? null;
+        const [data, total] = await Promise.all([
+            Order.find(filter)
+                .sort(sort)
+                .skip((pageNum - 1) * limitNum)
+                .limit(limitNum)
+                .populate('userId', 'name email phone')
+                .populate('items.productId', 'name')
+                .lean(),
+            Order.countDocuments(filter),
+        ]);
 
-        const order = new Order({
-            userId,
-            items,
-            totalPrice,
-            status: 'pending',
-            paymentMode: 'COD',
-            address,
-            latitude: resolvedLat,
-            longitude: resolvedLng,
-            createdAt: new Date(),
+        return res.status(200).json({ data, page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) });
+    } catch (error) {
+        console.error('Error listing all orders', error);
+        return res.status(500).json({ message: 'Error fetching orders' });
+    }
+};
+
+// Helper to build an order payload for emails with product names populated
+async function buildOrderEmailPayload(order, userDoc) {
+    try {
+        // Build product map for names/prices
+        const productIds = (order.items || [])
+            .map(i => (i.productId && i.productId._id ? i.productId._id : i.productId))
+            .filter(Boolean)
+            .map(id => id.toString());
+
+        const uniqueIds = [...new Set(productIds)];
+        const products = uniqueIds.length > 0
+            ? await Product.find({ _id: { $in: uniqueIds } }).select('_id name price')
+            : [];
+        const productMap = new Map(products.map(p => [p._id.toString(), p]));
+
+        // Optionally fetch user if not provided
+        let customerName = 'Customer';
+        let customerPhone = '';
+        if (userDoc && (userDoc.name || userDoc.email)) {
+            customerName = userDoc.name || userDoc.email;
+            customerPhone = userDoc.phone || '';
+        } else if (order.userId) {
+            const User = require('../models/user.model');
+            const u = await User.findById(order.userId).select('name email phone');
+            if (u) {
+                customerName = u.name || u.email || customerName;
+                customerPhone = u.phone || '';
+            }
+        }
+
+        const items = (order.items || []).map(i => {
+            const key = i.productId && i.productId._id ? i.productId._id.toString() : (i.productId ? i.productId.toString() : '');
+            const p = productMap.get(key);
+            return {
+                name: i.name || i.productName || (p ? p.name : key),
+                quantity: i.quantity,
+                price: i.price || (p ? p.price : undefined),
+            };
         });
 
-        await order.save();
-
-        // Clear user's cart after successful checkout
-        try {
-            user.cart = [];
-            await user.save();
-        } catch (err) {
-            console.error('Failed to clear user cart after order:', err);
-        }
-
-        // Prepare a sanitized order payload for emails/templates (include mapsLink if we have coords)
-        const mapsLink = (order.latitude != null && order.longitude != null)
-            ? `https://www.google.com/maps/search/?api=1&query=${order.latitude},${order.longitude}`
-            : null;
-
-        const orderForEmail = {
-            customerName: user.name || user.email || 'Customer',
+        return {
+            customerName,
+            customerPhone,
             _id: order._id,
             orderId: String(order._id),
             totalPrice: order.totalPrice,
             address: order.address,
-            items: order.items.map(i => ({ name: i.name || i.productName || i.productId, quantity: i.quantity, price: i.price })),
-            
+            items,
         };
+    } catch (err) {
+        console.error('Failed to build order email payload', err);
+        return {
+            customerName: userDoc?.name || userDoc?.email || 'Customer',
+            customerPhone: userDoc?.phone || '',
+            _id: order._id,
+            orderId: String(order._id),
+            totalPrice: order.totalPrice,
+            address: order.address,
+            items: (order.items || []).map(i => ({ name: i.name || i.productName || String(i.productId), quantity: i.quantity, price: i.price })),
+        };
+    }
+}
 
-        // Send notifications (best-effort)
-        try {
-            await sendOrderConfirmation(user.email, orderForEmail);
-        } catch (err) {
-            console.error('Error sending confirmation email', err);
+// Create a new order with partial-fulfillment, idempotency, and Mongo transaction
+exports.createOrder = async (req, res) => {
+    const { address, latitude, longitude, paymentMode, idempotencyKey } = req.body;
+    const userId = req.user.id;
+
+    const session = await Order.startSession();
+    try {
+        // Idempotency check (outside tx to short-circuit fast)
+        if (idempotencyKey) {
+            const existing = await Order.findOne({ userId, idempotencyKey });
+            if (existing) {
+                return res.status(200).json({ message: 'Order already created', order: existing, itemsOutOfStock: [] });
+            }
         }
 
-        try {
-            const adminEmail = process.env.ADMIN_EMAIL;
-            if (adminEmail) await sendNewOrderNotification(adminEmail, { order: orderForEmail, mapsLink });
-        } catch (err) {
-            console.error('Error sending new order notification', err);
+        // Load user with cart
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        if (!user.cart || user.cart.length === 0) {
+            return res.status(400).json({ message: 'Cart is empty' });
         }
 
-        res.status(201).json(order);
+        await session.startTransaction();
+
+        const fulfilledItems = [];
+        const outOfStock = [];
+
+        // Process each cart item and attempt atomic stock decrement within the session
+        for (const cartItem of user.cart) {
+            const productId = cartItem.productId;
+            const quantity = cartItem.quantity || 1;
+
+            const updated = await Product.findOneAndUpdate(
+                { _id: productId, stock: { $gte: quantity } },
+                { $inc: { stock: -quantity } },
+                { new: true, session }
+            );
+
+            if (!updated) {
+                // Query available stock for reporting
+                const current = await Product.findById(productId).select('stock name').session(session);
+                outOfStock.push({ productId: productId.toString(), requested: quantity, available: current ? current.stock : 0, name: current?.name });
+                continue;
+            }
+
+            fulfilledItems.push({
+                productId,
+                quantity,
+                price: updated.price, // price from DB at checkout
+                name: updated.name,
+            });
+        }
+
+        if (fulfilledItems.length === 0) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(409).json({ message: 'All items are out of stock', itemsOutOfStock: outOfStock });
+        }
+
+        // Compute totals and persist order
+        const total = fulfilledItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+        const resolvedLat = latitude ?? user.latitude ?? null;
+        const resolvedLng = longitude ?? user.longitude ?? null;
+
+        // Create the order (with idempotencyKey if provided)
+        const order = await Order.create([{
+            userId,
+            items: fulfilledItems.map(i => ({ productId: i.productId, quantity: i.quantity, price: i.price })),
+            totalPrice: Number(total.toFixed(2)),
+            status: 'pending',
+            paymentMode: paymentMode || 'COD',
+            address,
+            latitude: resolvedLat,
+            longitude: resolvedLng,
+            createdAt: new Date(),
+            idempotencyKey: idempotencyKey || undefined,
+        }], { session });
+
+        const createdOrder = order[0];
+
+        // Remove only the fulfilled items from the cart, keep out-of-stock
+        const fulfilledIds = new Set(fulfilledItems.map(i => String(i.productId)));
+        user.cart = user.cart.filter(ci => !fulfilledIds.has(String(ci.productId)));
+        await user.save({ session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        // Prepare email payload and notifications (async, fire-and-forget)
+        const mapsLink = (createdOrder.latitude != null && createdOrder.longitude != null)
+            ? `https://www.google.com/maps/search/?api=1&query=${createdOrder.latitude},${createdOrder.longitude}`
+            : null;
+
+        const orderForEmail = await buildOrderEmailPayload(createdOrder, user);
+
+        (async () => {
+            try { await sendOrderConfirmation(user.email, { order: orderForEmail }); } catch (e) { console.error('Email user failed', e); }
+            try {
+                const adminEmail = process.env.ADMIN_EMAIL;
+                if (adminEmail) await sendNewOrderNotification(adminEmail, { order: orderForEmail, mapsLink });
+            } catch (e) { console.error('Email admin failed', e); }
+            try {
+                const adminPhone = process.env.ADMIN_PHONE;
+                if (adminPhone) {
+                    const { sendSmsToAdmin } = require('../services/sms.service');
+                    const portal = process.env.ADMIN_PORTAL_URL || (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/admin/orders/${createdOrder._id}` : '');
+                    const smsBody = `New order received. ID: ${createdOrder._id}.\nStatus: pending. Visit portal to confirm address: ${portal}`.trim();
+                    await sendSmsToAdmin(adminPhone, smsBody);
+                }
+            } catch (e) { console.error('SMS admin failed', e); }
+        })();
+
+        return res.status(201).json({ message: 'Order created for available items', order: createdOrder, itemsOutOfStock: outOfStock });
     } catch (error) {
-        console.error('Error creating order', error);
-        res.status(500).json({ message: 'Error creating order' });
+        try { await session.abortTransaction(); } catch (_) {}
+        session.endSession();
+        console.error('Error creating order (partial flow)', error);
+        // Handle idempotency race (unique index) gracefully
+        if (idempotencyKey && error && error.code === 11000) {
+            const existing = await Order.findOne({ userId, idempotencyKey });
+            if (existing) return res.status(200).json({ message: 'Order already created', order: existing, itemsOutOfStock: [] });
+        }
+        return res.status(500).json({ message: 'Error creating order' });
     }
 };
 
@@ -112,7 +254,13 @@ exports.updateOrderStatus = async (req, res) => {
     const { status } = req.body;
 
     try {
-        const order = await Order.findById(orderId);
+        // Validate status against allowed transitions
+        const allowed = new Set(['pending', 'confirmed', 'delivered', 'cancelled']);
+        if (!allowed.has(status)) {
+            return res.status(400).json({ message: 'Invalid status value' });
+        }
+
+    const order = await Order.findById(orderId);
         if (!order) {
             return res.status(404).json({ message: 'Order not found' });
         }
@@ -129,23 +277,29 @@ exports.updateOrderStatus = async (req, res) => {
                 ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
                 : 'Location not available';
 
-            // Send email notification to admin (if configured)
+        // Send email notification to admin (if configured)
             try {
                 const adminEmail = process.env.ADMIN_EMAIL;
                 if (adminEmail) {
-                    const { sendNewOrderNotification } = require('../services/email.service');
-                    await sendNewOrderNotification(adminEmail, { order, mapsLink });
+            const { sendNewOrderNotification } = require('../services/email.service');
+            const orderForEmail = await buildOrderEmailPayload(order);
+            await sendNewOrderNotification(adminEmail, { order: orderForEmail, mapsLink });
                 }
             } catch (err) {
                 console.error('Error sending admin confirmation email with maps link', err);
             }
 
-            // Send SMS to admin (if configured)
+        // Send SMS to admin (if configured)
             try {
                 const adminPhone = process.env.ADMIN_PHONE;
                 if (adminPhone) {
                     const { sendSmsToAdmin } = require('../services/sms.service');
-                    const smsBody = `New order confirmed. ID: ${order._id}. Total: ${order.totalPrice}. Maps: ${mapsLink}`;
+            const orderForEmail = await buildOrderEmailPayload(order);
+            const items = orderForEmail.items || [];
+            const itemsPreview = items.slice(0, 3).map(i => `${i.name} x${i.quantity}`).join(', ');
+            const more = items.length > 3 ? `, +${items.length - 3} more` : '';
+            const customer = `${orderForEmail.customerName}${orderForEmail.customerPhone ? ` (${orderForEmail.customerPhone})` : ''}`;
+            const smsBody = `Order confirmed ${order._id}.\n By: ${customer}. \nItems: ${itemsPreview}${more}.\n Total: ${order.totalPrice}.\n Link to their location: ${mapsLink}\n`;
                     await sendSmsToAdmin(adminPhone, smsBody);
                 }
             } catch (err) {

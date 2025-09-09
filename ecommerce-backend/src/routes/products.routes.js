@@ -8,7 +8,7 @@ const { validateProduct } = require('../utils/validators');
 const router = express.Router();
 
 // Create a new product (admin or farmer) — controller enforces farmer ownership
-router.post('/', authMiddleware, uploadFields([{ name: 'images' }, { name: 'videos' }]), validateProduct, createProduct);
+router.post('/', authMiddleware,adminMiddleware, uploadFields([{ name: 'images' }, { name: 'videos' }]), validateProduct, createProduct);
 
 // Get all products with optional pagination
 router.get('/', getProducts);

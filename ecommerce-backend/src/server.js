@@ -1,8 +1,4 @@
-const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const logger = require('./config/logger');
 const app = require('./app');
 require('dotenv').config();
@@ -19,30 +15,25 @@ if (!process.env.JWT_SECRET) {
     process.exit(1);
 }
 
-// Middleware
-app.use(cors({
-    origin: process.env.FRONTEND_URL, // Whitelist frontend domain
-}));
-app.use(helmet());
-app.use(rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // Limit each IP to 100 requests per windowMs
-}));
-
 // Database connection
-mongoose.connect(process.env.DB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-})
-.then(() => {
-    logger.info('MongoDB connected');
-   console.log('MongoDB connected');
-    app.listen(PORT, () => {
-        logger.info(`Server is running on port ${PORT}`);
-        console.log(`Server is running on port ${PORT}`)
-    });
-})
-.catch(err => {
-    logger.error('MongoDB connection error:', err);
-    process.exit(1);
-});
+const connectWithRetry = async () => {
+    try {
+        await mongoose.connect(process.env.DB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 10000,
+        });
+        logger.info('MongoDB connected');
+        console.log('MongoDB connected');
+        app.listen(PORT, () => {
+            logger.info(`Server is running on port ${PORT}`);
+            console.log(`Server is running on port ${PORT}`);
+        });
+    } catch (err) {
+        logger.error('MongoDB connection error:', err);
+        console.error('MongoDB connection error:', err && err.message ? err.message : err);
+        setTimeout(connectWithRetry, 5000);
+    }
+};
+
+connectWithRetry();

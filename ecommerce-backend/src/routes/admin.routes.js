@@ -3,6 +3,7 @@ const router = express.Router();
 const adminController = require('../controllers/admin.controller');
 const authMiddleware = require('../middlewares/auth.middleware');
 const adminMiddleware = require('../middlewares/admin.middleware');
+const { getAllOrders } = require('../controllers/orders.controller');
 
 // Admin routes
 router.use(authMiddleware);
@@ -10,6 +11,9 @@ router.use(adminMiddleware);
 
 // Get analytics
 router.get('/analytics', adminController.getAnalytics);
+
+// Orders management
+router.get('/orders', getAllOrders);
 
 // Manage user roles
 router.put('/users/:id/role', adminController.updateUserRole);
