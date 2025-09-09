@@ -146,3 +146,76 @@ exports.logout = (req, res) => {
     res.clearCookie('token', cookieOptions);
     return res.status(200).json({ message: 'Logged out' });
 };
+
+// Admin signup - protected by ADMIN_SIGNUP_CODE
+exports.adminSignup = async (req, res) => {
+    try {
+        const { name, email, password, phone, address, latitude, longitude, adminCode } = req.body;
+        if (!process.env.ADMIN_SIGNUP_CODE) {
+            return res.status(500).json({ message: 'Admin signup disabled. Missing ADMIN_SIGNUP_CODE.' });
+        }
+        if (adminCode !== process.env.ADMIN_SIGNUP_CODE) {
+            return res.status(403).json({ message: 'Invalid admin signup code' });
+        }
+
+        const existing = await User.findOne({ email });
+        if (existing) return res.status(409).json({ message: 'Email already in use' });
+
+        const newAdmin = new User({
+            name,
+            email,
+            password,
+            phone,
+            address,
+            latitude: latitude || null,
+            longitude: longitude || null,
+            role: 'admin',
+        });
+
+        await newAdmin.save();
+        const role = 'admin';
+        const token = jwt.sign({ id: newAdmin._id, role, email: newAdmin.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        const isProd = process.env.NODE_ENV === 'production';
+        const cookieOptions = {
+            httpOnly: true,
+            secure: isProd,
+            sameSite: isProd ? 'none' : 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        };
+        if (process.env.COOKIE_DOMAIN) cookieOptions.domain = process.env.COOKIE_DOMAIN;
+        res.cookie('token', token, cookieOptions);
+        res.status(201).json({ token, user: { id: newAdmin._id, name: newAdmin.name, email: newAdmin.email, role } });
+    } catch (error) {
+        logger.error('Admin signup error: ', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+// Admin login - only allow users with role admin
+exports.adminLogin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = await User.findOne({ email });
+        if (!user || user.role !== 'admin') {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+
+        const role = 'admin';
+        const token = jwt.sign({ id: user._id, role, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        const isProd = process.env.NODE_ENV === 'production';
+        const cookieOptions = {
+            httpOnly: true,
+            secure: isProd,
+            sameSite: isProd ? 'none' : 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        };
+        if (process.env.COOKIE_DOMAIN) cookieOptions.domain = process.env.COOKIE_DOMAIN;
+        res.cookie('token', token, cookieOptions);
+        res.status(200).json({ token, user: { id: user._id, name: user.name, email: user.email, role } });
+    } catch (error) {
+        logger.error('Admin login error: ', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};

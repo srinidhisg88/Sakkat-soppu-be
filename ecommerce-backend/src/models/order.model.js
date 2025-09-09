@@ -49,7 +49,15 @@ const orderSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    idempotencyKey: {
+        type: String,
+        required: false,
+        index: true,
     }
 });
+
+// Ensure we don't create duplicate orders for the same user/key
+orderSchema.index({ userId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('Order', orderSchema);

@@ -12,6 +12,9 @@ router.post('/add', authMiddleware, cartController.addToCart);
 // Remove from cart
 router.delete('/remove/:productId', authMiddleware, cartController.removeFromCart);
 
+// Update item quantity (increment/decrement/set)
+router.patch('/item', authMiddleware, cartController.updateCartItem);
+
 // Clear cart
 router.post('/clear', authMiddleware, cartController.clearCart);
 

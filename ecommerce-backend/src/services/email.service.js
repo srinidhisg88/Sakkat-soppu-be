@@ -23,14 +23,24 @@ const { EMAIL_FROM, SENDGRID_API_KEY, SENDGRID_TEMPLATE_ORDER ,SENDGRID_TEMPLATE
 
 // NOTE: We intentionally do not provide any plain-text fallback. All emails require a SendGrid dynamic template.
 
-const sendOrderConfirmation = async (to, order) => {
-    // Template expects: customerName, orderId, totalPrice, address, items (array)
+const sendOrderConfirmation = async (to, orderDetails) => {
+    // Support both raw order object and a wrapper { order }
+    const orderObj = orderDetails && orderDetails.order ? orderDetails.order : (orderDetails || {});
+
+    // Provide both top-level and nested order data for template compatibility
     const dynamicTemplateData = {
-        customerName: order.customerName || order.userId || 'Customer',
-        orderId: String(order._id || order.id || ''),
-        totalPrice: order.totalPrice || 0,
-        address: order.address || '',
-        items: (order.items || []).map(i => ({ name: i.name || i.productName || i.productId, quantity: i.quantity || i.qty || 1, price: i.price || i.unitPrice || 0 })),
+        customerName: orderObj.customerName || orderObj.userId || 'Customer',
+        orderId: String(orderObj._id || orderObj.id || ''),
+        totalPrice: orderObj.totalPrice || 0,
+        address: orderObj.address || '',
+        items: (orderObj.items || []).map(i => ({ name: i.name || i.productName || i.productId, quantity: i.quantity || i.qty || 1, price: i.price || i.unitPrice || 0 })),
+        order: {
+            _id: orderObj._id || orderObj.id || '',
+            customerName: orderObj.customerName || '',
+            totalPrice: orderObj.totalPrice || 0,
+            address: orderObj.address || '',
+            items: (orderObj.items || []).map(i => ({ name: i.name || i.productName || i.productId, quantity: i.quantity || i.qty || 1, price: i.price || i.unitPrice || 0 })),
+        },
     };
 
     // Send using order confirmation template
@@ -58,10 +68,12 @@ const sendNewOrderNotification = async (adminEmail, orderDetails) => {
         order: {
             _id: orderObj._id || orderObj.id || orderObj.orderId || '',
             userId: (orderObj.userId && (orderObj.userId._id || orderObj.userId)) || orderObj.userId || '',
+            customerName: orderObj.customerName || '',
+            customerPhone: orderObj.customerPhone || '',
             totalPrice: orderObj.totalPrice || 0,
             status: orderObj.status || 'pending',
             address: orderObj.address || '',
-            items: (orderObj.items || []).map(i => ({ productId: i.productId || i.productId, quantity: i.quantity, price: i.price })),
+            items: (orderObj.items || []).map(i => ({ name: i.name || i.productName || i.productId, quantity: i.quantity, price: i.price })),
         },
         mapsLink: mapsLink || null,
         year: new Date().getFullYear(),
