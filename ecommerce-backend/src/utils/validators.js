@@ -37,6 +37,16 @@ const loginSchema = Joi.object({
     password: Joi.string().required(),
 });
 
+const forgotPasswordSchema = Joi.object({
+    email: Joi.string().email().required(),
+});
+
+const resetPasswordSchema = Joi.object({
+    email: Joi.string().email().required(),
+    token: Joi.string().min(10).required(),
+    newPassword: Joi.string().min(6).required(),
+});
+
 const validate = (schema) => (req, res, next) => {
     const { error } = schema.validate(req.body);
     if (error) return res.status(400).json({ message: error.details[0].message });
@@ -48,6 +58,8 @@ module.exports = {
     validateOrder: validate(orderSchema),
     validateSignup: validate(signupSchema),
     validateLogin: validate(loginSchema),
+    validateForgotPassword: validate(forgotPasswordSchema),
+    validateResetPassword: validate(resetPasswordSchema),
     validateFarmer: validate(Joi.object({
         name: Joi.string().min(2).required(),
         email: Joi.string().email().required(),

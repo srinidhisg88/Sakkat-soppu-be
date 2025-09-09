@@ -5,7 +5,8 @@ const User = require('../models/user.model');
 // Lightweight token verifier that sets req.user to the JWT payload (id, role, email)
 const authMiddleware = (req, res, next) => {
     const header = req.headers.authorization;
-    const token = header && header.split(' ')[1];
+    const bearer = header && header.split(' ')[1];
+    const token = bearer || (req.cookies && req.cookies.token);
     if (!token) return res.status(401).json({ message: 'Unauthorized' });
 
     jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
@@ -21,7 +22,8 @@ const authMiddleware = (req, res, next) => {
 // Stronger authenticate that loads the full user document (without password)
 const authenticate = async (req, res, next) => {
     const header = req.headers.authorization;
-    const token = header && header.split(' ')[1];
+    const bearer = header && header.split(' ')[1];
+    const token = bearer || (req.cookies && req.cookies.token);
     if (!token) return res.status(401).json({ message: 'Unauthorized' });
 
     try {

@@ -1,8 +1,8 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const logger = require('./config/logger');
 const authRoutes = require('./routes/auth.routes');
 const productsRoutes = require('./routes/products.routes');
@@ -16,11 +16,14 @@ require('dotenv').config();
 const app = express();
 
 // Middleware
+app.set('trust proxy', 1);
 app.use(cors({
     origin: process.env.FRONTEND_URL, // Whitelist frontend domain
+    credentials: true,
 }));
 app.use(helmet());
 app.use(express.json());
+app.use(cookieParser());
 app.use(rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100 // Limit each IP to 100 requests per windowMs
@@ -36,14 +39,5 @@ app.use('/api/cart', cartRoutes);
 
 // Error handling middleware
 app.use(errorMiddleware);
-
-// MongoDB connection
-mongoose.connect(process.env.DB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => {
-        logger.info('MongoDB connected');
-    })
-    .catch(err => {
-        logger.error('MongoDB connection error:', err);
-    });
 
 module.exports = app;

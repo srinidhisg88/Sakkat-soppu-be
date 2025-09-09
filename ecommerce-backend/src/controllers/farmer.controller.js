@@ -10,10 +10,9 @@ exports.createFarmer = async (req, res) => {
         const existing = await Farmer.findOne({ email });
         if (existing) return res.status(409).json({ message: 'Farmer email already exists' });
 
-        const tempPassword = password || Math.random().toString(36).slice(-8);
-        const hashed = await bcrypt.hash(tempPassword, 10);
-
-        const farmer = new Farmer({ name, email, password: hashed, phone, address, farmName, farmDescription, latitude, longitude });
+    const tempPassword = password || Math.random().toString(36).slice(-8);
+    // Do not pre-hash; model pre-save hook will hash
+    const farmer = new Farmer({ name, email, password: tempPassword, phone, address, farmName, farmDescription, latitude, longitude });
         await farmer.save();
 
         // Send credentials to farmer via email and SMS (best-effort)
@@ -47,7 +46,7 @@ exports.updateFarmer = async (req, res) => {
     try {
         const { id } = req.params;
         const update = req.body;
-        if (update.password) update.password = await bcrypt.hash(update.password, 10);
+    if (update.password) update.password = await bcrypt.hash(update.password, 10); // necessary here, pre-save hook not triggered by findByIdAndUpdate
         const farmer = await Farmer.findByIdAndUpdate(id, update, { new: true });
         if (!farmer) return res.status(404).json({ message: 'Farmer not found' });
         res.status(200).json({ message: 'Farmer updated', farmer });
