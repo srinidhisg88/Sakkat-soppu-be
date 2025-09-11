@@ -46,6 +46,22 @@ exports.getAllOrders = async (req, res) => {
     }
 };
 
+// Admin: get single order by id (populated)
+exports.getOrderById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const order = await Order.findById(id)
+            .populate('userId', 'name email phone')
+            .populate('items.productId', 'name price')
+            .lean();
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+        return res.status(200).json(order);
+    } catch (error) {
+        console.error('Error fetching order by id', error);
+        return res.status(500).json({ message: 'Error fetching order' });
+    }
+};
+
 // Helper to build an order payload for emails with product names populated
 async function buildOrderEmailPayload(order, userDoc) {
     try {
@@ -111,7 +127,7 @@ async function buildOrderEmailPayload(order, userDoc) {
 
 // Create a new order with partial-fulfillment, idempotency, and Mongo transaction
 exports.createOrder = async (req, res) => {
-    const { address, latitude, longitude, paymentMode, idempotencyKey } = req.body;
+    const { address, latitude, longitude, paymentMode, idempotencyKey, couponCode } = req.body;
     const userId = req.user.id;
 
     const session = await Order.startSession();
@@ -169,8 +185,42 @@ exports.createOrder = async (req, res) => {
             return res.status(409).json({ message: 'All items are out of stock', itemsOutOfStock: outOfStock });
         }
 
-        // Compute totals and persist order
-        const total = fulfilledItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+        // Compute totals
+        const subtotal = fulfilledItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+
+        // Optional coupon application
+        let discountAmount = 0;
+        let appliedCode = undefined;
+        if (couponCode) {
+            try {
+                const Coupon = require('../models/coupon.model');
+                const now = new Date();
+                const code = String(couponCode).toUpperCase();
+                const c = await Coupon.findOne({ code, isActive: true });
+                if (!c) {
+                    // Ignore invalid codes silently; frontends can pre-validate
+                } else if ((c.startsAt && now < c.startsAt) || (c.expiresAt && now > c.expiresAt)) {
+                    // expired or not started
+                } else if (c.usageLimit && c.usageCount >= c.usageLimit) {
+                    // exhausted
+                } else if (subtotal < (c.minOrderValue || 0)) {
+                    // below min order value
+                } else {
+                    if (c.discountType === 'percentage') {
+                        discountAmount = (subtotal * c.discountValue) / 100;
+                        if (c.maxDiscount) discountAmount = Math.min(discountAmount, c.maxDiscount);
+                    } else if (c.discountType === 'amount') {
+                        discountAmount = c.discountValue;
+                    }
+                    discountAmount = Math.max(0, Math.min(discountAmount, subtotal));
+                    appliedCode = code;
+                }
+            } catch (e) {
+                console.error('Coupon application failed', e);
+            }
+        }
+
+        const total = Number((subtotal - discountAmount).toFixed(2));
         const resolvedLat = latitude ?? user.latitude ?? null;
         const resolvedLng = longitude ?? user.longitude ?? null;
 
@@ -178,7 +228,10 @@ exports.createOrder = async (req, res) => {
         const order = await Order.create([{
             userId,
             items: fulfilledItems.map(i => ({ productId: i.productId, quantity: i.quantity, price: i.price })),
-            totalPrice: Number(total.toFixed(2)),
+            totalPrice: total,
+            subtotalPrice: Number(subtotal.toFixed(2)),
+            discountAmount: Number(discountAmount.toFixed(2)),
+            couponCode: appliedCode,
             status: 'pending',
             paymentMode: paymentMode || 'COD',
             address,
@@ -189,6 +242,16 @@ exports.createOrder = async (req, res) => {
         }], { session });
 
         const createdOrder = order[0];
+
+        // If a coupon was applied, increment usage (post-commit safe best effort)
+        if (createdOrder.couponCode) {
+            try {
+                const Coupon = require('../models/coupon.model');
+                await Coupon.updateOne({ code: createdOrder.couponCode }, { $inc: { usageCount: 1 } }).exec();
+            } catch (e) {
+                console.error('Failed to increment coupon usage', e);
+            }
+        }
 
         // Remove only the fulfilled items from the cart, keep out-of-stock
         const fulfilledIds = new Set(fulfilledItems.map(i => String(i.productId)));
@@ -268,6 +331,22 @@ exports.updateOrderStatus = async (req, res) => {
         const prevStatus = order.status;
         order.status = status;
         await order.save();
+
+        // Audit log for status change
+        try {
+            const { logAudit } = require('../services/audit.service');
+            logAudit({
+                req,
+                action: 'ORDER_STATUS_UPDATE',
+                entityType: 'order',
+                entityId: order._id,
+                before: { status: prevStatus },
+                after: { status },
+                meta: {}
+            });
+        } catch (e) {
+            console.error('Audit log failed for order status update', e);
+        }
 
         // If status changed to 'confirmed', send admin a Google Maps link for the order location via email and SMS
         if (prevStatus !== 'confirmed' && status === 'confirmed') {
