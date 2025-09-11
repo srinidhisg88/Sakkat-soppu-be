@@ -8,6 +8,8 @@ const productSchema = Joi.object({
     imageUrl: Joi.string().uri().optional(),
     description: Joi.string().optional(),
     isOrganic: Joi.boolean().optional(),
+    g: Joi.number().integer().min(0).optional(),
+    pieces: Joi.number().integer().min(0).optional(),
 });
 
 const orderSchema = Joi.object({

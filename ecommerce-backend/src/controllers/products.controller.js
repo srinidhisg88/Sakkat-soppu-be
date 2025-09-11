@@ -6,7 +6,7 @@ const { handleError } = require('../middlewares/error.middleware');
 // Create a new product
 exports.createProduct = async (req, res) => {
     try {
-        const { name, category, price, stock, description, isOrganic } = req.body;
+    const { name, category, price, stock, description, isOrganic, g, pieces } = req.body;
         let imageUrl = null;
         const images = [];
         const videos = [];
@@ -39,6 +39,8 @@ exports.createProduct = async (req, res) => {
             videos,
             description,
             isOrganic,
+            g,
+            pieces,
         };
 
         // If the creator is a farmer, associate product with farmerId
@@ -99,8 +101,8 @@ exports.getProductById = async (req, res) => {
 // Update a product by ID
 exports.updateProduct = async (req, res) => {
     try {
-        const { name, category, price, stock, description, isOrganic } = req.body;
-        const updateData = { name, category, price, stock, description, isOrganic };
+    const { name, category, price, stock, description, isOrganic, g, pieces } = req.body;
+    const updateData = { name, category, price, stock, description, isOrganic, g, pieces };
 
         if (req.files) {
             if (req.files.images) {
