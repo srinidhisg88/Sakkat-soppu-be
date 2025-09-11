@@ -51,7 +51,7 @@ const resetPasswordSchema = Joi.object({
 const couponCreateSchema = Joi.object({
     code: Joi.string().alphanum().min(3).max(20).required(),
     description: Joi.string().allow('').optional(),
-    discountType: Joi.string().valid('percentage', 'amount').required(),
+    discountType: Joi.string().valid('percentage', 'flat').required(),
     discountValue: Joi.number().positive().required(),
     minOrderValue: Joi.number().min(0).optional(),
     maxDiscount: Joi.number().min(0).optional(),
