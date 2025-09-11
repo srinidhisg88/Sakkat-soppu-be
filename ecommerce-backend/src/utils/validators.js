@@ -1,8 +1,11 @@
 const Joi = require('joi');
 
+const objectIdRegex = /^[a-fA-F0-9]{24}$/;
+
 const productSchema = Joi.object({
     name: Joi.string().required(),
-    category: Joi.string().required(),
+    category: Joi.string().optional(),
+    categoryId: Joi.string().pattern(objectIdRegex).optional(),
     price: Joi.number().positive().required(),
     stock: Joi.number().integer().min(0).required(),
     imageUrl: Joi.string().uri().optional(),
@@ -10,7 +13,7 @@ const productSchema = Joi.object({
     isOrganic: Joi.boolean().optional(),
     g: Joi.number().integer().min(0).optional(),
     pieces: Joi.number().integer().min(0).optional(),
-});
+}).xor('category', 'categoryId');
 
 const orderSchema = Joi.object({
     items: Joi.array().items(Joi.object({

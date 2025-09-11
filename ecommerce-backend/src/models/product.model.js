@@ -5,9 +5,17 @@ const productSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+    // Backward compatible category name (will mirror from Category on write)
     category: {
         type: String,
         required: true,
+    },
+    // New normalized reference
+    categoryId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Category',
+        required: false,
+        index: true,
     },
     price: {
         type: Number,

@@ -10,6 +10,7 @@ const ordersRoutes = require('./routes/orders.routes');
 const adminRoutes = require('./routes/admin.routes');
 const farmerRoutes = require('./routes/farmer.routes');
 const cartRoutes = require('./routes/cart.routes');
+const categoriesController = require('./controllers/categories.controller');
 const errorMiddleware = require('./middlewares/error.middleware');
 require('dotenv').config();
 
@@ -73,6 +74,7 @@ app.use('/api/orders', ordersRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/farmer', farmerRoutes);
 app.use('/api/cart', cartRoutes);
+app.get('/api/categories', categoriesController.listPublic);
 
 // Error handling middleware
 app.use(errorMiddleware);
