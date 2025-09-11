@@ -1,5 +1,6 @@
 const Product = require('../models/product.model');
 const { cloudinaryUpload } = require('../services/cloudinary.service');
+const { logAudit } = require('../services/audit.service');
 const { handleError } = require('../middlewares/error.middleware');
 
 // Create a new product
@@ -47,21 +48,34 @@ exports.createProduct = async (req, res) => {
 
         const newProduct = new Product(productData);
 
-        await newProduct.save();
-        res.status(201).json({ message: 'Product created successfully', product: newProduct });
+    await newProduct.save();
+    // Audit
+    logAudit({ req, action: 'PRODUCT_CREATE', entityType: 'product', entityId: newProduct._id, before: null, after: { name: newProduct.name, price: newProduct.price, stock: newProduct.stock }, meta: {} });
+
+    res.status(201).json({ message: 'Product created successfully', product: newProduct });
     } catch (error) {
         handleError(res, error);
     }
 };
 
-// Get all products with pagination
+// Get all products with pagination and optional lowStock filter
 exports.getProducts = async (req, res) => {
     try {
-        const { page = 1, limit = 10 } = req.query;
-        const products = await Product.find()
-            .skip((page - 1) * limit)
-            .limit(limit);
-        const total = await Product.countDocuments();
+        let { page = 1, limit = 10, lowStock, threshold } = req.query;
+        page = parseInt(page, 10) || 1;
+        limit = parseInt(limit, 10) || 10;
+        const query = {};
+        if (String(lowStock) === 'true') {
+            const th = Math.max(parseInt(threshold, 10) || 10, 0);
+            query.stock = { $lte: th };
+        }
+
+        const [products, total] = await Promise.all([
+            Product.find(query)
+                .skip((page - 1) * limit)
+                .limit(limit),
+            Product.countDocuments(query)
+        ]);
 
         res.status(200).json({ products, total, page, totalPages: Math.ceil(total / limit) });
     } catch (error) {
@@ -120,6 +134,10 @@ exports.updateProduct = async (req, res) => {
         if (!updatedProduct) {
             return res.status(404).json({ message: 'Product not found' });
         }
+        // Audit
+        try {
+            logAudit({ req, action: 'PRODUCT_UPDATE', entityType: 'product', entityId: updatedProduct._id, before: { name: product.name, price: product.price, stock: product.stock }, after: { name: updatedProduct.name, price: updatedProduct.price, stock: updatedProduct.stock }, meta: {} });
+        } catch (_) {}
         res.status(200).json({ message: 'Product updated successfully', product: updatedProduct });
     } catch (error) {
         handleError(res, error);
@@ -137,6 +155,10 @@ exports.deleteProduct = async (req, res) => {
         }
 
         await Product.findByIdAndDelete(req.params.id);
+        // Audit
+        try {
+            logAudit({ req, action: 'PRODUCT_DELETE', entityType: 'product', entityId: product._id, before: { name: product.name, price: product.price, stock: product.stock }, after: null, meta: {} });
+        } catch (_) {}
         res.status(200).json({ message: 'Product deleted successfully' });
     } catch (error) {
         handleError(res, error);

@@ -47,6 +47,22 @@ const resetPasswordSchema = Joi.object({
     newPassword: Joi.string().min(6).required(),
 });
 
+// Coupon validators
+const couponCreateSchema = Joi.object({
+    code: Joi.string().alphanum().min(3).max(20).required(),
+    description: Joi.string().allow('').optional(),
+    discountType: Joi.string().valid('percentage', 'amount').required(),
+    discountValue: Joi.number().positive().required(),
+    minOrderValue: Joi.number().min(0).optional(),
+    maxDiscount: Joi.number().min(0).optional(),
+    startsAt: Joi.date().optional(),
+    expiresAt: Joi.date().optional(),
+    usageLimit: Joi.number().integer().min(1).optional(),
+    isActive: Joi.boolean().optional(),
+});
+
+const couponUpdateSchema = couponCreateSchema.fork(['code'], (s) => s.optional());
+
 // Admin signup requires an adminCode to prevent open admin creation
 const adminSignupSchema = signupSchema.keys({
     adminCode: Joi.string().min(6).required(),
@@ -68,6 +84,8 @@ module.exports = {
     validateAdminSignup: validate(adminSignupSchema),
     // For admin login we can reuse the standard login schema
     validateAdminLogin: validate(loginSchema),
+    validateCouponCreate: validate(couponCreateSchema),
+    validateCouponUpdate: validate(couponUpdateSchema),
     validateFarmer: validate(Joi.object({
         name: Joi.string().min(2).required(),
         email: Joi.string().email().required(),
