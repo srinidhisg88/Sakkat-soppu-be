@@ -20,7 +20,13 @@ const orderSchema = new mongoose.Schema({
         price: {
             type: Number,
             required: true
-        }
+    },
+    // Snapshots to preserve product state at time of order
+    name: { type: String },
+    g: { type: Number },
+    pieces: { type: Number },
+    unitLabel: { type: String },
+    priceForUnitLabel: { type: String }
     }],
     totalPrice: {
         type: Number,

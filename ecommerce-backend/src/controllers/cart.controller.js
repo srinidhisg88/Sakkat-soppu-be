@@ -8,7 +8,14 @@ exports.viewCart = async (req, res) => {
         const userId = req.user.id;
         const user = await User.findById(userId).populate('cart.productId');
         if (!user) return res.status(404).json({ message: 'User not found' });
-        res.status(200).json({ cart: user.cart });
+        // Ensure product virtuals are visible and add unit helpers at the top level of each item
+        const cart = (user.cart || []).map(ci => ({
+            ...ci.toObject(),
+            productId: ci.productId,
+            unitLabel: ci.productId?.unitLabel || null,
+            priceForUnitLabel: ci.productId?.priceForUnitLabel || null,
+        }));
+        res.status(200).json({ cart });
     } catch (err) {
         logger.error('Error viewing cart', err);
         res.status(500).json({ message: 'Error viewing cart' });
@@ -36,7 +43,13 @@ exports.addToCart = async (req, res) => {
 
         await user.save();
         const populated = await User.findById(userId).populate('cart.productId');
-        res.status(200).json({ cart: populated.cart });
+        const cart = (populated.cart || []).map(ci => ({
+            ...ci.toObject(),
+            productId: ci.productId,
+            unitLabel: ci.productId?.unitLabel || null,
+            priceForUnitLabel: ci.productId?.priceForUnitLabel || null,
+        }));
+        res.status(200).json({ cart });
     } catch (err) {
         logger.error('Error adding to cart', err);
         res.status(500).json({ message: 'Error adding to cart' });
@@ -56,7 +69,13 @@ exports.removeFromCart = async (req, res) => {
         await user.save();
 
         const populated = await User.findById(userId).populate('cart.productId');
-        res.status(200).json({ cart: populated.cart });
+        const cart = (populated.cart || []).map(ci => ({
+            ...ci.toObject(),
+            productId: ci.productId,
+            unitLabel: ci.productId?.unitLabel || null,
+            priceForUnitLabel: ci.productId?.priceForUnitLabel || null,
+        }));
+        res.status(200).json({ cart });
     } catch (err) {
         logger.error('Error removing from cart', err);
         res.status(500).json({ message: 'Error removing from cart' });
@@ -119,7 +138,13 @@ exports.updateCartItem = async (req, res) => {
         await user.save();
 
         const populated = await User.findById(userId).populate('cart.productId');
-        return res.status(200).json({ cart: populated.cart });
+        const cart = (populated.cart || []).map(ci => ({
+            ...ci.toObject(),
+            productId: ci.productId,
+            unitLabel: ci.productId?.unitLabel || null,
+            priceForUnitLabel: ci.productId?.priceForUnitLabel || null,
+        }));
+        return res.status(200).json({ cart });
     } catch (err) {
         logger.error('Error updating cart item', err);
         return res.status(500).json({ message: 'Error updating cart item' });

@@ -92,13 +92,15 @@ async function buildOrderEmailPayload(order, userDoc) {
             }
         }
 
-        const items = (order.items || []).map(i => {
+    const items = (order.items || []).map(i => {
             const key = i.productId && i.productId._id ? i.productId._id.toString() : (i.productId ? i.productId.toString() : '');
             const p = productMap.get(key);
             return {
                 name: i.name || i.productName || (p ? p.name : key),
                 quantity: i.quantity,
                 price: i.price || (p ? p.price : undefined),
+        unitLabel: i.unitLabel || null,
+        priceForUnitLabel: i.priceForUnitLabel || null,
             };
         });
 
@@ -120,7 +122,7 @@ async function buildOrderEmailPayload(order, userDoc) {
             orderId: String(order._id),
             totalPrice: order.totalPrice,
             address: order.address,
-            items: (order.items || []).map(i => ({ name: i.name || i.productName || String(i.productId), quantity: i.quantity, price: i.price })),
+            items: (order.items || []).map(i => ({ name: i.name || i.productName || String(i.productId), quantity: i.quantity, price: i.price, unitLabel: i.unitLabel || null, priceForUnitLabel: i.priceForUnitLabel || null })),
         };
     }
 }
@@ -176,6 +178,10 @@ exports.createOrder = async (req, res) => {
                 quantity,
                 price: updated.price, // price from DB at checkout
                 name: updated.name,
+                g: typeof updated.g === 'number' ? updated.g : undefined,
+                pieces: typeof updated.pieces === 'number' ? updated.pieces : undefined,
+                unitLabel: updated.unitLabel || null,
+                priceForUnitLabel: updated.priceForUnitLabel || null,
             });
         }
 
@@ -227,7 +233,16 @@ exports.createOrder = async (req, res) => {
         // Create the order (with idempotencyKey if provided)
         const order = await Order.create([{
             userId,
-            items: fulfilledItems.map(i => ({ productId: i.productId, quantity: i.quantity, price: i.price })),
+            items: fulfilledItems.map(i => ({
+                productId: i.productId,
+                quantity: i.quantity,
+                price: i.price,
+                name: i.name,
+                g: i.g,
+                pieces: i.pieces,
+                unitLabel: i.unitLabel,
+                priceForUnitLabel: i.priceForUnitLabel,
+            })),
             totalPrice: total,
             subtotalPrice: Number(subtotal.toFixed(2)),
             discountAmount: Number(discountAmount.toFixed(2)),
