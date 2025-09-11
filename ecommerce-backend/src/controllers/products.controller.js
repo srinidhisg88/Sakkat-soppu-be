@@ -6,7 +6,7 @@ const { handleError } = require('../middlewares/error.middleware');
 // Create a new product
 exports.createProduct = async (req, res) => {
     try {
-    const { name, category, price, stock, description, isOrganic, g, pieces } = req.body;
+    const { name, category, categoryId, price, stock, description, isOrganic, g, pieces } = req.body;
         let imageUrl = null;
         const images = [];
         const videos = [];
@@ -32,6 +32,7 @@ exports.createProduct = async (req, res) => {
         const productData = {
             name,
             category,
+            categoryId,
             price,
             stock,
             imageUrl,
@@ -42,6 +43,15 @@ exports.createProduct = async (req, res) => {
             g,
             pieces,
         };
+
+        // If categoryId provided, mirror the Category.name into string category
+        if (categoryId && !category) {
+            try {
+                const Category = require('../models/category.model');
+                const c = await Category.findById(categoryId).select('name');
+                if (c) productData.category = c.name;
+            } catch (_) {}
+        }
 
         // If the creator is a farmer, associate product with farmerId
         if (req.user && req.user.role === 'farmer') {
@@ -101,8 +111,8 @@ exports.getProductById = async (req, res) => {
 // Update a product by ID
 exports.updateProduct = async (req, res) => {
     try {
-    const { name, category, price, stock, description, isOrganic, g, pieces } = req.body;
-    const updateData = { name, category, price, stock, description, isOrganic, g, pieces };
+    const { name, category, categoryId, price, stock, description, isOrganic, g, pieces } = req.body;
+    const updateData = { name, category, categoryId, price, stock, description, isOrganic, g, pieces };
 
         if (req.files) {
             if (req.files.images) {
@@ -130,6 +140,15 @@ exports.updateProduct = async (req, res) => {
 
         if (req.user && req.user.role === 'farmer' && String(product.farmerId) !== String(req.user.id)) {
             return res.status(403).json({ message: 'Forbidden. Cannot edit another farmer\'s product.' });
+        }
+
+        // If switching to categoryId (and no category provided), mirror name
+        if (categoryId && !category) {
+            try {
+                const Category = require('../models/category.model');
+                const c = await Category.findById(categoryId).select('name');
+                if (c) updateData.category = c.name;
+            } catch (_) {}
         }
 
         const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true });

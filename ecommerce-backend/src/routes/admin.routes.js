@@ -5,6 +5,7 @@ const authMiddleware = require('../middlewares/auth.middleware');
 const adminMiddleware = require('../middlewares/admin.middleware');
 const { getAllOrders, getOrderById } = require('../controllers/orders.controller');
 const couponsController = require('../controllers/coupons.controller');
+const categoriesController = require('../controllers/categories.controller');
 const { validateCouponCreate, validateCouponUpdate } = require('../utils/validators');
 
 // Admin routes
@@ -27,6 +28,12 @@ router.get('/coupons/:id', couponsController.getCoupon);
 router.post('/coupons', validateCouponCreate, couponsController.createCoupon);
 router.put('/coupons/:id', validateCouponUpdate, couponsController.updateCoupon);
 router.delete('/coupons/:id', couponsController.deleteCoupon);
+
+// Categories management
+router.get('/categories', categoriesController.adminList);
+router.post('/categories', categoriesController.create);
+router.put('/categories/:id', categoriesController.update);
+router.delete('/categories/:id', categoriesController.remove);
 
 // Manage user roles
 router.put('/users/:id/role', adminController.updateUserRole);
