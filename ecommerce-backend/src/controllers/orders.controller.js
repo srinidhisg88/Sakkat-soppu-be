@@ -269,8 +269,20 @@ exports.createOrder = async (req, res) => {
         }
 
         // Remove only the fulfilled items from the cart, keep out-of-stock
-        const fulfilledIds = new Set(fulfilledItems.map(i => String(i.productId)));
-        user.cart = user.cart.filter(ci => !fulfilledIds.has(String(ci.productId)));
+        // Reduce quantities in cart by fulfilled units; remove only when fully fulfilled
+        const fulfilledMap = new Map();
+        for (const fi of fulfilledItems) {
+            const key = String(fi.productId);
+            fulfilledMap.set(key, (fulfilledMap.get(key) || 0) + (fi.quantity || 0));
+        }
+        user.cart = user.cart
+            .map(ci => {
+                const key = String(ci.productId);
+                const fulfilled = fulfilledMap.get(key) || 0;
+                const newQty = (ci.quantity || 0) - fulfilled;
+                return { ...ci.toObject(), quantity: newQty };
+            })
+            .filter(ci => (ci.quantity || 0) > 0);
         await user.save({ session });
 
         await session.commitTransaction();
