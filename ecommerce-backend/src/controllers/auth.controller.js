@@ -5,6 +5,18 @@ const jwt = require('jsonwebtoken');
 const { sendEmail, sendPasswordReset } = require('../services/email.service');
 // Previously used getGeocode; now prefer device-provided lat/lng
 const logger = require('../config/logger');
+const { OAuth2Client } = require('google-auth-library');
+
+const googleClient = (() => {
+  try {
+    if (process.env.GOOGLE_CLIENT_ID) {
+      return new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    }
+  } catch (e) {
+    logger.error('Failed to initialize Google OAuth client', e);
+  }
+  return null;
+})();
 
 // User signup
 exports.signup = async (req, res) => {
@@ -38,26 +50,62 @@ exports.signup = async (req, res) => {
     }
 };
 
-// User login
-exports.login = async (req, res) => {
+// Google OAuth login/signup using ID token
+exports.googleLogin = async (req, res) => {
     try {
-        const { email, password } = req.body;
-        // Try finding a normal user first
-        let user = await User.findOne({ email });
-        let roleSource = 'user';
+        const { idToken, latitude, longitude } = req.body;
+        if (!process.env.GOOGLE_CLIENT_ID) {
+            return res.status(500).json({ message: 'Google login not configured' });
+        }
+        if (!idToken) return res.status(400).json({ message: 'Missing idToken' });
+
+        // Verify token with Google
+        const ticket = await googleClient.verifyIdToken({
+            idToken,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        const googleId = payload.sub;
+        const email = payload.email?.toLowerCase();
+        const emailVerified = !!payload.email_verified;
+        const name = payload.name || email?.split('@')[0] || 'User';
+        const picture = payload.picture || undefined;
+
+        if (!email) return res.status(400).json({ message: 'Email not present in Google token' });
+
+        // Find existing user either by googleId or email
+        let user = await User.findOne({ $or: [{ googleId }, { email }] });
+        const isNew = !user;
 
         if (!user) {
-            // try farmer
-            user = await Farmer.findOne({ email });
-            roleSource = 'farmer';
+            // Create a user with a random password (won't be used for Google accounts)
+            const crypto = require('crypto');
+            const randomPassword = crypto.randomBytes(16).toString('hex');
+            user = new User({
+                name,
+                email,
+                password: randomPassword,
+                provider: 'google',
+                googleId,
+                emailVerified,
+                picture,
+                latitude: latitude || null,
+                longitude: longitude || null,
+            });
+            await user.save();
+        } else {
+            // Update linkage if needed
+            let updated = false;
+            if (!user.googleId) { user.googleId = googleId; updated = true; }
+            if (picture && user.picture !== picture) { user.picture = picture; updated = true; }
+            if (emailVerified && !user.emailVerified) { user.emailVerified = true; updated = true; }
+            if (latitude != null && user.latitude == null) { user.latitude = latitude; updated = true; }
+            if (longitude != null && user.longitude == null) { user.longitude = longitude; updated = true; }
+            if (user.provider !== 'google') { user.provider = 'google'; updated = true; }
+            if (updated) await user.save();
         }
 
-        if (!user) return res.status(401).json({ message: 'Invalid credentials' });
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
-
-        const role = roleSource === 'farmer' ? 'farmer' : user.role;
+        const role = user.role || 'user';
         const token = jwt.sign({ id: user._id, role, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
         const isProd = process.env.NODE_ENV === 'production';
         const cookieOptions = {
@@ -68,12 +116,49 @@ exports.login = async (req, res) => {
         };
         if (process.env.COOKIE_DOMAIN) cookieOptions.domain = process.env.COOKIE_DOMAIN;
         res.cookie('token', token, cookieOptions);
-        res.status(200).json({ token, user: { id: user._id, name: user.name, email: user.email, role } });
+        return res.status(200).json({ token, user: { id: user._id, name: user.name, email: user.email, role, isNew } });
     } catch (error) {
-        logger.error('Login error: ', error);
-        res.status(500).json({ message: 'Internal server error' });
+        logger.error('Google login error: ', error);
+        return res.status(401).json({ message: 'Invalid Google token' });
     }
 };
+
+// User login
+exports.login = async (req, res) => {
+     try {
+         const { email, password } = req.body;
+         // Try finding a normal user first
+         let user = await User.findOne({ email });
+         let roleSource = 'user';
+
+         if (!user) {
+             // try farmer
+             user = await Farmer.findOne({ email });
+             roleSource = 'farmer';
+         }
+
+         if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+
+         const isMatch = await bcrypt.compare(password, user.password);
+         if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+
+         const role = roleSource === 'farmer' ? 'farmer' : user.role;
+         const token = jwt.sign({ id: user._id, role, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
+         const isProd = process.env.NODE_ENV === 'production';
+         const cookieOptions = {
+             httpOnly: true,
+             secure: isProd,
+             sameSite: isProd ? 'none' : 'lax',
+             maxAge: 7 * 24 * 60 * 60 * 1000,
+         };
+         if (process.env.COOKIE_DOMAIN) cookieOptions.domain = process.env.COOKIE_DOMAIN;
+         res.cookie('token', token, cookieOptions);
+         res.status(200).json({ token, user: { id: user._id, name: user.name, email: user.email, role } });
+     } catch (error) {
+         logger.error('Login error: ', error);
+         res.status(500).json({ message: 'Internal server error' });
+     }
+ };
 
 // Request password reset: generate token, save expiry, email link
 exports.requestPasswordReset = async (req, res) => {
