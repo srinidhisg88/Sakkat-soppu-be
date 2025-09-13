@@ -228,6 +228,28 @@ exports.createOrder = async (req, res) => {
     // Compute totals
     const subtotal = fulfilledItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
 
+        // Enforce minimum order subtotal BEFORE coupon discount and delivery fee
+        try {
+            const DeliveryConfig = require('../models/deliveryConfig.model');
+            const cfg = await DeliveryConfig.getOrDefaults();
+            const minRequired = Number(cfg.minOrderSubtotal || 0);
+            if (minRequired > 0 && subtotal < minRequired) {
+                await session.abortTransaction();
+                session.endSession();
+                const shortfall = Number((minRequired - subtotal).toFixed(2));
+                return res.status(400).json({
+                    message: 'Minimum order amount not met',
+                    reason: 'MIN_ORDER_NOT_MET',
+                    minOrderSubtotal: minRequired,
+                    subtotal,
+                    shortfall,
+                    itemsOutOfStock: outOfStock,
+                });
+            }
+        } catch (e) {
+            // If settings fetch fails, do not block checkout
+        }
+
         // Optional coupon application
         let discountAmount = 0;
         let appliedCode = undefined;
@@ -260,29 +282,7 @@ exports.createOrder = async (req, res) => {
             }
         }
 
-        // Enforce minimum order subtotal (after discount, before delivery fee)
-        try {
-            const DeliveryConfig = require('../models/deliveryConfig.model');
-            const cfg = await DeliveryConfig.getOrDefaults();
-            const netSubtotal = Math.max(0, subtotal - discountAmount);
-            const minRequired = Number(cfg.minOrderSubtotal || 0);
-            if (minRequired > 0 && netSubtotal < minRequired) {
-                // Nothing should be persisted; rollback and inform client
-                await session.abortTransaction();
-                session.endSession();
-                const shortfall = Number((minRequired - netSubtotal).toFixed(2));
-                return res.status(400).json({
-                    message: 'Minimum order amount not met',
-                    reason: 'MIN_ORDER_NOT_MET',
-                    minOrderSubtotal: minRequired,
-                    netSubtotal,
-                    shortfall,
-                    itemsOutOfStock: outOfStock,
-                });
-            }
-        } catch (e) {
-            // If settings fetch fails, do not block checkout
-        }
+    // (Minimum order already enforced above before coupon/fee)
 
         // Delivery fee
         let deliveryFee = 0;
