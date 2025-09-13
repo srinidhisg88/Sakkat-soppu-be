@@ -41,7 +41,7 @@ const fallbackOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'https://sakkat-soppu-admin.vercel.app',
-  'https://sakkatsppu.com',
+  'https://sakkatsoppu.com',
   'https://admin.sakkatsoppu.com'
 ].filter(Boolean);
 
