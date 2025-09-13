@@ -221,8 +221,8 @@ exports.createOrder = async (req, res) => {
             return res.status(409).json({ message: 'All items are out of stock', itemsOutOfStock: outOfStock });
         }
 
-        // Compute totals
-        const subtotal = fulfilledItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+    // Compute totals
+    const subtotal = fulfilledItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
 
         // Optional coupon application
         let discountAmount = 0;
@@ -256,7 +256,21 @@ exports.createOrder = async (req, res) => {
             }
         }
 
-        const total = Number((subtotal - discountAmount).toFixed(2));
+        // Delivery fee
+        let deliveryFee = 0;
+        let freeDeliveryApplied = false;
+        try {
+            const DeliveryConfig = require('../models/deliveryConfig.model');
+            const { computeDeliveryFee } = require('../utils/delivery');
+            const cfg = await DeliveryConfig.getOrDefaults();
+            const calc = computeDeliveryFee(subtotal - discountAmount, cfg);
+            deliveryFee = calc.deliveryFee || 0;
+            freeDeliveryApplied = !!calc.freeDeliveryApplied;
+        } catch (e) {
+            // fallback silently
+        }
+
+        const total = Number(((subtotal - discountAmount) + deliveryFee).toFixed(2));
         const resolvedLat = latitude ?? user.latitude ?? null;
         const resolvedLng = longitude ?? user.longitude ?? null;
 
@@ -277,6 +291,8 @@ exports.createOrder = async (req, res) => {
             subtotalPrice: Number(subtotal.toFixed(2)),
             discountAmount: Number(discountAmount.toFixed(2)),
             couponCode: appliedCode,
+            deliveryFee: Number(deliveryFee.toFixed ? deliveryFee.toFixed(2) : deliveryFee),
+            freeDeliveryApplied,
             status: 'pending',
             paymentMode: paymentMode || 'COD',
             address,
