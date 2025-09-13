@@ -46,6 +46,24 @@ const userSchema = new mongoose.Schema({
     resetPasswordExpires: {
         type: Date,
     },
+    // OAuth fields
+    provider: {
+        type: String,
+        enum: ['local', 'google'],
+        default: 'local',
+    },
+    googleId: {
+        type: String,
+        index: true,
+        sparse: true,
+    },
+    emailVerified: {
+        type: Boolean,
+        default: false,
+    },
+    picture: {
+        type: String,
+    },
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {
