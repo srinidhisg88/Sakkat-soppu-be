@@ -123,6 +123,8 @@ async function buildOrderEmailPayload(order, userDoc) {
             subtotalPrice: order.subtotalPrice ?? null,
             discountAmount: order.discountAmount ?? 0,
             couponCode: order.couponCode ?? null,
+            deliveryFee: order.deliveryFee ?? 0,
+            freeDeliveryApplied: !!order.freeDeliveryApplied,
             items,
         };
     } catch (err) {
@@ -143,6 +145,8 @@ async function buildOrderEmailPayload(order, userDoc) {
             subtotalPrice: order.subtotalPrice ?? null,
             discountAmount: order.discountAmount ?? 0,
             couponCode: order.couponCode ?? null,
+            deliveryFee: order.deliveryFee ?? 0,
+            freeDeliveryApplied: !!order.freeDeliveryApplied,
             items: (order.items || []).map(i => ({
                 name: i.name || i.productName || String(i.productId),
                 quantity: i.quantity,
@@ -254,6 +258,30 @@ exports.createOrder = async (req, res) => {
             } catch (e) {
                 console.error('Coupon application failed', e);
             }
+        }
+
+        // Enforce minimum order subtotal (after discount, before delivery fee)
+        try {
+            const DeliveryConfig = require('../models/deliveryConfig.model');
+            const cfg = await DeliveryConfig.getOrDefaults();
+            const netSubtotal = Math.max(0, subtotal - discountAmount);
+            const minRequired = Number(cfg.minOrderSubtotal || 0);
+            if (minRequired > 0 && netSubtotal < minRequired) {
+                // Nothing should be persisted; rollback and inform client
+                await session.abortTransaction();
+                session.endSession();
+                const shortfall = Number((minRequired - netSubtotal).toFixed(2));
+                return res.status(400).json({
+                    message: 'Minimum order amount not met',
+                    reason: 'MIN_ORDER_NOT_MET',
+                    minOrderSubtotal: minRequired,
+                    netSubtotal,
+                    shortfall,
+                    itemsOutOfStock: outOfStock,
+                });
+            }
+        } catch (e) {
+            // If settings fetch fails, do not block checkout
         }
 
         // Delivery fee
