@@ -379,7 +379,7 @@ exports.createOrder = async (req, res) => {
                 const adminPhone = process.env.ADMIN_PHONE;
                 if (adminPhone) {
                     const { sendSmsToAdmin } = require('../services/sms.service');
-                    const portal = process.env.ADMIN_PORTAL_URL || (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/admin/orders/${createdOrder._id}` : '');
+                    const portal = 'https://admin.sakkatsoppu.com';
                     const smsBody = `New order received. ID: ${createdOrder._id}.\nStatus: pending. Visit portal to confirm address: ${portal}`.trim();
                     await sendSmsToAdmin(adminPhone, smsBody);
                 }
