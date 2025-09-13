@@ -6,6 +6,7 @@ const authMiddleware = require('../middlewares/auth.middleware');
 // View cart
 router.get('/', authMiddleware, cartController.viewCart);
 
+
 // Add to cart
 router.post('/add', authMiddleware, cartController.addToCart);
 

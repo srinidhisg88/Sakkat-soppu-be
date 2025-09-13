@@ -7,6 +7,7 @@ const { getAllOrders, getOrderById } = require('../controllers/orders.controller
 const couponsController = require('../controllers/coupons.controller');
 const categoriesController = require('../controllers/categories.controller');
 const { validateCouponCreate, validateCouponUpdate } = require('../utils/validators');
+const settingsController = require('../controllers/settings.controller');
 
 // Admin routes
 router.use(authMiddleware);
@@ -34,6 +35,10 @@ router.get('/categories', categoriesController.adminList);
 router.post('/categories', categoriesController.create);
 router.put('/categories/:id', categoriesController.update);
 router.delete('/categories/:id', categoriesController.remove);
+
+// Delivery settings
+router.get('/delivery-settings', settingsController.getDeliverySettings);
+router.put('/delivery-settings', settingsController.updateDeliverySettings);
 
 // Manage user roles
 router.put('/users/:id/role', adminController.updateUserRole);

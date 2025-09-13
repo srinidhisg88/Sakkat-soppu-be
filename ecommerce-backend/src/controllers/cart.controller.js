@@ -1,6 +1,8 @@
 const User = require('../models/user.model');
 const Product = require('../models/product.model');
 const logger = require('../config/logger');
+const DeliveryConfig = require('../models/deliveryConfig.model');
+const { computeDeliveryFee } = require('../utils/delivery');
 
 // View cart (populate product details)
 exports.viewCart = async (req, res) => {
@@ -150,3 +152,5 @@ exports.updateCartItem = async (req, res) => {
         return res.status(500).json({ message: 'Error updating cart item' });
     }
 };
+
+// (Cart summary endpoint removed; frontend computes totals)

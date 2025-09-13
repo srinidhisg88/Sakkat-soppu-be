@@ -47,6 +47,17 @@ const orderSchema = new mongoose.Schema({
         uppercase: true,
         trim: true
     },
+    deliveryFee: {
+        type: Number,
+        required: false,
+        default: 0,
+        min: 0,
+    },
+    freeDeliveryApplied: {
+        type: Boolean,
+        required: false,
+        default: false,
+    },
     status: {
         type: String,
         enum: ['pending', 'confirmed', 'delivered', 'cancelled'],
