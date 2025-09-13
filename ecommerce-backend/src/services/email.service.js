@@ -28,18 +28,48 @@ const sendOrderConfirmation = async (to, orderDetails) => {
     const orderObj = orderDetails && orderDetails.order ? orderDetails.order : (orderDetails || {});
 
     // Provide both top-level and nested order data for template compatibility
+    const items = (orderObj.items || []).map(i => ({
+        name: i.name || i.productName || i.productId,
+        quantity: i.quantity || i.qty || 1,
+        price: i.price || i.unitPrice || 0,
+        unitLabel: i.unitLabel || null,
+        priceForUnitLabel: i.priceForUnitLabel || null,
+        lineTotal: (i.price || i.unitPrice || 0) * (i.quantity || i.qty || 0),
+    }));
+
     const dynamicTemplateData = {
         customerName: orderObj.customerName || orderObj.userId || 'Customer',
-        orderId: String(orderObj._id || orderObj.id || ''),
+        customerPhone: orderObj.customerPhone || '',
+        orderId: String(orderObj._id || orderObj.id || orderObj.orderId || ''),
         totalPrice: orderObj.totalPrice || 0,
         address: orderObj.address || '',
-        items: (orderObj.items || []).map(i => ({ name: i.name || i.productName || i.productId, quantity: i.quantity || i.qty || 1, price: i.price || i.unitPrice || 0 })),
+        latitude: orderObj.latitude ?? null,
+        longitude: orderObj.longitude ?? null,
+        status: orderObj.status || 'pending',
+        paymentMode: orderObj.paymentMode || 'COD',
+        paymentMethod: orderObj.paymentMode || 'COD',
+        createdAt: orderObj.createdAt || new Date().toISOString(),
+        subtotalPrice: orderObj.subtotalPrice ?? null,
+        discountAmount: orderObj.discountAmount || 0,
+        couponCode: orderObj.couponCode || null,
+        items,
         order: {
-            _id: orderObj._id || orderObj.id || '',
+            _id: orderObj._id || orderObj.id || orderObj.orderId || '',
+            userId: (orderObj.userId && (orderObj.userId._id || orderObj.userId)) || orderObj.userId || '',
             customerName: orderObj.customerName || '',
+            customerPhone: orderObj.customerPhone || '',
             totalPrice: orderObj.totalPrice || 0,
+            status: orderObj.status || 'pending',
             address: orderObj.address || '',
-            items: (orderObj.items || []).map(i => ({ name: i.name || i.productName || i.productId, quantity: i.quantity || i.qty || 1, price: i.price || i.unitPrice || 0 })),
+            latitude: orderObj.latitude ?? null,
+            longitude: orderObj.longitude ?? null,
+            paymentMode: orderObj.paymentMode || 'COD',
+            paymentMethod: orderObj.paymentMode || 'COD',
+            createdAt: orderObj.createdAt || new Date().toISOString(),
+            subtotalPrice: orderObj.subtotalPrice ?? null,
+            discountAmount: orderObj.discountAmount || 0,
+            couponCode: orderObj.couponCode || null,
+            items,
         },
     };
 
@@ -64,6 +94,17 @@ const sendNewOrderNotification = async (adminEmail, orderDetails) => {
 
     const orderObj = payload || {};
 
+    const items = (orderObj.items || []).map(i => ({
+        name: i.name || i.productName || i.productId,
+        quantity: i.quantity,
+        price: i.price,
+        unitLabel: i.unitLabel || null,
+        priceForUnitLabel: i.priceForUnitLabel || null,
+        unitPrice: i.priceForUnitLabel || null,
+        unit: i.unitLabel || null,
+        lineTotal: (i.price || 0) * (i.quantity || 0),
+    }));
+
     const dynamicTemplateData = {
         order: {
             _id: orderObj._id || orderObj.id || orderObj.orderId || '',
@@ -73,7 +114,15 @@ const sendNewOrderNotification = async (adminEmail, orderDetails) => {
             totalPrice: orderObj.totalPrice || 0,
             status: orderObj.status || 'pending',
             address: orderObj.address || '',
-            items: (orderObj.items || []).map(i => ({ name: i.name || i.productName || i.productId, quantity: i.quantity, price: i.price })),
+            latitude: orderObj.latitude ?? null,
+            longitude: orderObj.longitude ?? null,
+            paymentMode: orderObj.paymentMode || 'COD',
+            paymentMethod: orderObj.paymentMode || 'COD',
+            createdAt: orderObj.createdAt || new Date().toISOString(),
+            subtotalPrice: orderObj.subtotalPrice ?? null,
+            discountAmount: orderObj.discountAmount || 0,
+            couponCode: orderObj.couponCode || null,
+            items,
         },
         mapsLink: mapsLink || null,
         year: new Date().getFullYear(),

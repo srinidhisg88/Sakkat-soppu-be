@@ -92,15 +92,18 @@ async function buildOrderEmailPayload(order, userDoc) {
             }
         }
 
-    const items = (order.items || []).map(i => {
+        const items = (order.items || []).map(i => {
             const key = i.productId && i.productId._id ? i.productId._id.toString() : (i.productId ? i.productId.toString() : '');
             const p = productMap.get(key);
             return {
                 name: i.name || i.productName || (p ? p.name : key),
                 quantity: i.quantity,
                 price: i.price || (p ? p.price : undefined),
-        unitLabel: i.unitLabel || null,
-        priceForUnitLabel: i.priceForUnitLabel || null,
+                unitLabel: i.unitLabel || null,
+                priceForUnitLabel: i.priceForUnitLabel || null,
+                unitPrice: i.priceForUnitLabel || null, // alias for template compatibility
+                unit: i.unitLabel || null, // alias for template compatibility
+                lineTotal: (i.price || (p ? p.price : 0)) * (i.quantity || 0),
             };
         });
 
@@ -111,6 +114,15 @@ async function buildOrderEmailPayload(order, userDoc) {
             orderId: String(order._id),
             totalPrice: order.totalPrice,
             address: order.address,
+            latitude: order.latitude ?? null,
+            longitude: order.longitude ?? null,
+            status: order.status,
+            paymentMode: order.paymentMode,
+            paymentMethod: order.paymentMode, // alias for template compatibility
+            createdAt: order.createdAt,
+            subtotalPrice: order.subtotalPrice ?? null,
+            discountAmount: order.discountAmount ?? 0,
+            couponCode: order.couponCode ?? null,
             items,
         };
     } catch (err) {
@@ -122,7 +134,25 @@ async function buildOrderEmailPayload(order, userDoc) {
             orderId: String(order._id),
             totalPrice: order.totalPrice,
             address: order.address,
-            items: (order.items || []).map(i => ({ name: i.name || i.productName || String(i.productId), quantity: i.quantity, price: i.price, unitLabel: i.unitLabel || null, priceForUnitLabel: i.priceForUnitLabel || null })),
+            latitude: order.latitude ?? null,
+            longitude: order.longitude ?? null,
+            status: order.status,
+            paymentMode: order.paymentMode,
+            paymentMethod: order.paymentMode, // alias for template compatibility
+            createdAt: order.createdAt,
+            subtotalPrice: order.subtotalPrice ?? null,
+            discountAmount: order.discountAmount ?? 0,
+            couponCode: order.couponCode ?? null,
+            items: (order.items || []).map(i => ({
+                name: i.name || i.productName || String(i.productId),
+                quantity: i.quantity,
+                price: i.price,
+                unitLabel: i.unitLabel || null,
+                priceForUnitLabel: i.priceForUnitLabel || null,
+                unitPrice: i.priceForUnitLabel || null, // alias for template compatibility
+                unit: i.unitLabel || null, // alias for template compatibility
+                lineTotal: (i.price || 0) * (i.quantity || 0),
+            })),
         };
     }
 }
