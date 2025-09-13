@@ -52,6 +52,8 @@ const sendOrderConfirmation = async (to, orderDetails) => {
         subtotalPrice: orderObj.subtotalPrice ?? null,
         discountAmount: orderObj.discountAmount || 0,
         couponCode: orderObj.couponCode || null,
+        deliveryFee: orderObj.deliveryFee || 0,
+        freeDeliveryApplied: !!orderObj.freeDeliveryApplied,
         items,
         order: {
             _id: orderObj._id || orderObj.id || orderObj.orderId || '',
@@ -69,6 +71,8 @@ const sendOrderConfirmation = async (to, orderDetails) => {
             subtotalPrice: orderObj.subtotalPrice ?? null,
             discountAmount: orderObj.discountAmount || 0,
             couponCode: orderObj.couponCode || null,
+            deliveryFee: orderObj.deliveryFee || 0,
+            freeDeliveryApplied: !!orderObj.freeDeliveryApplied,
             items,
         },
     };
@@ -122,6 +126,8 @@ const sendNewOrderNotification = async (adminEmail, orderDetails) => {
             subtotalPrice: orderObj.subtotalPrice ?? null,
             discountAmount: orderObj.discountAmount || 0,
             couponCode: orderObj.couponCode || null,
+            deliveryFee: orderObj.deliveryFee || 0,
+            freeDeliveryApplied: !!orderObj.freeDeliveryApplied,
             items,
         },
         mapsLink: mapsLink || null,
