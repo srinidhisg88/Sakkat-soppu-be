@@ -155,9 +155,10 @@ exports.updateProduct = async (req, res) => {
             try { const arr = JSON.parse(v); return Array.isArray(arr) ? arr : []; } catch { return [v].filter(Boolean); }
         };
 
-        const removeImages = parseArray(req.body.removeImages);
-        const removeVideos = parseArray(req.body.removeVideos);
-        const imagesOrder = parseArray(req.body.imagesOrder);
+    const removeImages = parseArray(req.body.removeImages);
+    const removeVideos = parseArray(req.body.removeVideos);
+    const imagesOrder = parseArray(req.body.imagesOrder);
+    const videosOrder = parseArray(req.body.videosOrder);
 
         // Start with existing media
         let newImages = Array.isArray(product.images) ? [...product.images] : [];
@@ -230,6 +231,24 @@ exports.updateProduct = async (req, res) => {
             newImages.forEach((u, i) => { if (!orderSet.has(u)) { ordered.push(u); orderedPids.push(newImagesPublicIds[i]); } });
             newImages = ordered;
             newImagesPublicIds = orderedPids;
+        }
+
+        // Reorder videos if videosOrder provided
+        if (videosOrder.length) {
+            const orderSet = new Set(videosOrder);
+            const ordered = [];
+            const orderedPids = [];
+            const mapUrlToIndex = new Map(newVideos.map((u, i) => [u, i]));
+            for (const url of videosOrder) {
+                if (mapUrlToIndex.has(url)) {
+                    const idx = mapUrlToIndex.get(url);
+                    ordered.push(newVideos[idx]);
+                    orderedPids.push(newVideosPublicIds[idx]);
+                }
+            }
+            newVideos.forEach((u, i) => { if (!orderSet.has(u)) { ordered.push(u); orderedPids.push(newVideosPublicIds[i]); } });
+            newVideos = ordered;
+            newVideosPublicIds = orderedPids;
         }
 
         // Primary image logic
