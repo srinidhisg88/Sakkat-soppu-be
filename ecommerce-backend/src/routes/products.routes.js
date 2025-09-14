@@ -3,12 +3,12 @@ const { createProduct, getProducts, getProductById, updateProduct, deleteProduct
 const authMiddleware = require('../middlewares/auth.middleware');
 const { uploadFields } = require('../services/cloudinary.service');
 const adminMiddleware = require('../middlewares/admin.middleware');
-const { validateProduct } = require('../utils/validators');
+const { validateProductCreate, validateProductUpdate } = require('../utils/validators');
 
 const router = express.Router();
 
 // Create a new product (admin or farmer) — controller enforces farmer ownership
-router.post('/', authMiddleware,adminMiddleware, uploadFields([{ name: 'images' }, { name: 'videos' }]), validateProduct, createProduct);
+router.post('/', authMiddleware, adminMiddleware, uploadFields([{ name: 'images' }, { name: 'videos' }]), validateProductCreate, createProduct);
 
 // Get all products with optional pagination
 router.get('/', getProducts);
@@ -17,7 +17,7 @@ router.get('/', getProducts);
 router.get('/:id', getProductById);
 
 // Update a product by ID (admin or owning farmer)
-router.put('/:id', authMiddleware, uploadFields([{ name: 'images' }, { name: 'videos' }]), validateProduct, updateProduct);
+router.put('/:id', authMiddleware, uploadFields([{ name: 'images' }, { name: 'videos' }]), validateProductUpdate, updateProduct);
 
 // Delete a product by ID (admin or owning farmer)
 router.delete('/:id', authMiddleware, deleteProduct);

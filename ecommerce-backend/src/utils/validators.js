@@ -2,7 +2,14 @@ const Joi = require('joi');
 
 const objectIdRegex = /^[a-fA-F0-9]{24}$/;
 
-const productSchema = Joi.object({
+// Helper: accept either an array of strings or a JSON string representing an array
+const arrayOrJson = (itemSchema = Joi.string()) => Joi.alternatives().try(
+    Joi.array().items(itemSchema),
+    Joi.string()
+).optional();
+
+// Create: require core fields; allow either category or categoryId
+const productCreateSchema = Joi.object({
     name: Joi.string().required(),
     category: Joi.string().optional(),
     categoryId: Joi.string().pattern(objectIdRegex).optional(),
@@ -14,6 +21,25 @@ const productSchema = Joi.object({
     g: Joi.number().integer().min(0).optional(),
     pieces: Joi.number().integer().min(0).optional(),
 }).xor('category', 'categoryId');
+
+// Update: all fields optional; include media management fields
+const productUpdateSchema = Joi.object({
+    name: Joi.string().optional(),
+    category: Joi.string().optional(),
+    categoryId: Joi.string().pattern(objectIdRegex).optional(),
+    price: Joi.number().positive().optional(),
+    stock: Joi.number().integer().min(0).optional(),
+    imageUrl: Joi.string().uri().allow('').optional(),
+    description: Joi.string().optional(),
+    isOrganic: Joi.boolean().optional(),
+    g: Joi.number().integer().min(0).optional(),
+    pieces: Joi.number().integer().min(0).optional(),
+    // Media management inputs (either repeated fields forming arrays or JSON strings)
+    removeImages: arrayOrJson(Joi.string()),
+    removeVideos: arrayOrJson(Joi.string()),
+    imagesOrder: arrayOrJson(Joi.string()),
+    videosOrder: arrayOrJson(Joi.string()),
+});
 
 const orderSchema = Joi.object({
     items: Joi.array().items(Joi.object({
@@ -80,7 +106,8 @@ const validate = (schema) => (req, res, next) => {
 };
 
 module.exports = {
-    validateProduct: validate(productSchema),
+    validateProductCreate: validate(productCreateSchema),
+    validateProductUpdate: validate(productUpdateSchema),
     validateOrder: validate(orderSchema),
     validateSignup: validate(signupSchema),
     validateLogin: validate(loginSchema),
