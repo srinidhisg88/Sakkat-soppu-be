@@ -10,8 +10,8 @@ router.get('/profile', authMiddleware, getProfile);
 router.put('/profile', authMiddleware, uploadFields([{ name: 'images' }, { name: 'videos' }]), updateProfile);
 
 // Farmer product creation (auth required and controller will associate farmerId)
-const { validateProduct } = require('../utils/validators');
+const { validateProductCreate } = require('../utils/validators');
 const productController = require('../controllers/products.controller');
-router.post('/products', authMiddleware, uploadFields([{ name: 'images' }, { name: 'videos' }]), validateProduct, productController.createProduct);
+router.post('/products', authMiddleware, uploadFields([{ name: 'images' }, { name: 'videos' }]), validateProductCreate, productController.createProduct);
 
 module.exports = router;
