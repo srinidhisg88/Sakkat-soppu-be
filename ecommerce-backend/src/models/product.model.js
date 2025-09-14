@@ -42,7 +42,10 @@ const productSchema = new mongoose.Schema({
         required: true,
     },
     images: [{ type: String }],
+    // Store Cloudinary public_ids in parallel arrays to enable precise deletions (not required by frontend)
+    imagesPublicIds: [{ type: String }],
     videos: [{ type: String }],
+    videosPublicIds: [{ type: String }],
     description: {
         type: String,
         required: true,
