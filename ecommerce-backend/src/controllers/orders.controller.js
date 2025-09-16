@@ -217,6 +217,17 @@ exports.createOrder = async (req, res) => {
                 unitLabel: updated.unitLabel || null,
                 priceForUnitLabel: updated.priceForUnitLabel || null,
             });
+
+            // Publish stock change for this product
+            try {
+                const { publishStockChange } = require('../realtime/pubsub');
+                publishStockChange({
+                    productId: String(updated._id),
+                    stock: updated.stock,
+                    version: updated.__v,
+                    updatedAt: updated.updatedAt,
+                });
+            } catch (_) {}
         }
 
         if (fulfilledItems.length === 0) {
