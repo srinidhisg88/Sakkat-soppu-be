@@ -27,6 +27,9 @@ app.set('trust proxy', 1);
 //     allowedHeaders: ['Content-Type', 'Authorization'],
 // }));
 const normalizeOrigin = (o) => (o ? o.replace(/\/$/, '') : o);
+const toHostname = (orig) => {
+  try { return new URL(orig).hostname.toLowerCase(); } catch { return ''; }
+};
 
 // Allow configuring multiple origins via CORS_ORIGINS (comma-separated)
 const originsEnv = process.env.CORS_ORIGINS || '';
@@ -46,14 +49,31 @@ const fallbackOrigins = [
   'https://admin.sakkatsoppu.com'
 ].filter(Boolean);
 
-const allowedOrigins = new Set(
-  (envOrigins.length ? envOrigins : fallbackOrigins).map(normalizeOrigin)
-);
+// Support wildcard host patterns via entries like "*.vercel.app" in CORS_ORIGINS
+const exactOrigins = new Set();
+const wildcardHosts = [];
+
+(envOrigins.length ? envOrigins : fallbackOrigins).forEach((entry) => {
+  const e = normalizeOrigin(entry);
+  if (!e) return;
+  if (e.startsWith('*.')) {
+    // wildcard host (no protocol expected). store suffix host
+    const host = e.slice(2).toLowerCase();
+    if (host) wildcardHosts.push(host);
+  } else {
+    exactOrigins.add(e);
+  }
+});
 
 app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true); // non-browser or same-origin
-    const ok = allowedOrigins.has(normalizeOrigin(origin));
+    const norm = normalizeOrigin(origin);
+    let ok = exactOrigins.has(norm);
+    if (!ok && wildcardHosts.length) {
+      const host = toHostname(norm);
+      ok = host && wildcardHosts.some(suffix => host.endsWith(suffix));
+    }
     if (ok) return callback(null, true);
     if (logger?.warn) logger.warn(`CORS blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
