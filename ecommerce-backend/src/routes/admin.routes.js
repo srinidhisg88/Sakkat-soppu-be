@@ -45,10 +45,13 @@ router.put('/users/:id/role', adminController.updateUserRole);
 
 // Manage farmers
 const farmerController = require('../controllers/farmer.controller');
-const { validateFarmer } = require('../utils/validators');
-router.post('/farmers', validateFarmer, farmerController.createFarmer);
-router.put('/farmers/:id', farmerController.updateFarmer);
-router.delete('/farmers/:id', farmerController.deleteFarmer);
+const { validateFarmerCreate, validateFarmerUpdate } = require('../utils/validators');
+const { uploadFields } = require('../services/cloudinary.service');
+router.get('/farmers', farmerController.adminListFarmers);
+router.get('/farmers/:id', farmerController.adminGetFarmer);
+router.post('/farmers', uploadFields([{ name: 'images' }, { name: 'videos' }]), validateFarmerCreate, farmerController.adminCreateFarmer);
+router.put('/farmers/:id', uploadFields([{ name: 'images' }, { name: 'videos' }]), validateFarmerUpdate, farmerController.adminUpdateFarmer);
+router.delete('/farmers/:id', farmerController.adminDeleteFarmer);
 
 // Export the router
 module.exports = router;

@@ -1,5 +1,4 @@
 const User = require('../models/user.model');
-const Farmer = require('../models/farmer.model');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { sendEmail, sendPasswordReset } = require('../services/email.service');
@@ -127,22 +126,15 @@ exports.googleLogin = async (req, res) => {
 exports.login = async (req, res) => {
      try {
          const { email, password } = req.body;
-         // Try finding a normal user first
-         let user = await User.findOne({ email });
-         let roleSource = 'user';
-
-         if (!user) {
-             // try farmer
-             user = await Farmer.findOne({ email });
-             roleSource = 'farmer';
-         }
+         // Find user by email
+         const user = await User.findOne({ email });
 
          if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
          const isMatch = await bcrypt.compare(password, user.password);
          if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
 
-         const role = roleSource === 'farmer' ? 'farmer' : user.role;
+         const role = user.role;
          const token = jwt.sign({ id: user._id, role, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
          const isProd = process.env.NODE_ENV === 'production';
          const cookieOptions = {

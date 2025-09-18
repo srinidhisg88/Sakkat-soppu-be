@@ -1,55 +1,157 @@
 const Farmer = require('../models/farmer.model');
 const logger = require('../config/logger');
-const bcrypt = require('bcrypt');
-const { cloudinaryUpload } = require('../services/cloudinary.service');
+const { deleteAsset } = require('../services/cloudinary.service');
 
-// Admin: create a farmer account (returns temporary credentials)
-exports.createFarmer = async (req, res) => {
+// Helper to parse arrays from repeated fields or JSON strings
+const parseArray = (v) => {
+    if (v == null) return [];
+    if (Array.isArray(v)) return v.filter(Boolean);
+    try { const arr = JSON.parse(v); return Array.isArray(arr) ? arr : []; } catch { return [v].filter(Boolean); }
+};
+
+// Admin: create farmer profile (no credentials)
+exports.adminCreateFarmer = async (req, res) => {
     try {
-        const { name, email, password, phone, address, farmName, farmDescription, latitude, longitude } = req.body;
-        const existing = await Farmer.findOne({ email });
-        if (existing) return res.status(409).json({ message: 'Farmer email already exists' });
+        const { name, phone, address, farmName, farmDescription, latitude, longitude } = req.body;
 
-    const tempPassword = password || Math.random().toString(36).slice(-8);
-    // Do not pre-hash; model pre-save hook will hash
-    const farmer = new Farmer({ name, email, password: tempPassword, phone, address, farmName, farmDescription, latitude, longitude });
-        await farmer.save();
+        const farmImages = [];
+        const farmImagesPublicIds = [];
+        const farmVideos = [];
+        const farmVideosPublicIds = [];
 
-        // Send credentials to farmer via email and SMS (best-effort)
-        try {
-            const { sendFarmerCredentials } = require('../services/email.service');
-            await sendFarmerCredentials(email, { email, password: tempPassword });
-        } catch (err) {
-            logger.error('Error sending farmer credentials email', err);
-        }
-
-        try {
-            if (phone) {
-                const { sendSmsToAdmin } = require('../services/sms.service');
-                // send to farmer phone the login credentials
-                await sendSmsToAdmin(phone, `Your farmer account was created. Login: ${email} Password: ${tempPassword}`);
+        if (req.files && Array.isArray(req.files.images)) {
+            for (const f of req.files.images) {
+                const url = f.path || f.secure_url;
+                const publicId = f.filename || (f.public_id || undefined);
+                if (url) farmImages.push(url);
+                if (publicId) farmImagesPublicIds.push(publicId);
             }
-        } catch (err) {
-            logger.error('Error sending farmer credentials SMS', err);
+        }
+        if (req.files && Array.isArray(req.files.videos)) {
+            for (const f of req.files.videos) {
+                const url = f.path || f.secure_url;
+                const publicId = f.filename || (f.public_id || undefined);
+                if (url) farmVideos.push(url);
+                if (publicId) farmVideosPublicIds.push(publicId);
+            }
         }
 
-        // return temporary credentials to admin (also returned) so they can pass to farmer if needed
-        res.status(201).json({ message: 'Farmer created', credentials: { email, password: tempPassword } });
+        const farmer = new Farmer({
+            name, phone, address, farmName, farmDescription, latitude, longitude,
+            farmImages, farmImagesPublicIds, farmVideos, farmVideosPublicIds,
+        });
+        await farmer.save();
+        res.status(201).json({ message: 'Farmer created', farmer });
     } catch (err) {
         logger.error('Error creating farmer', err);
         res.status(500).json({ message: 'Internal server error' });
     }
 };
 
-// Admin: update farmer
-exports.updateFarmer = async (req, res) => {
+// Admin: update farmer with media management
+exports.adminUpdateFarmer = async (req, res) => {
     try {
         const { id } = req.params;
-        const update = req.body;
-    if (update.password) update.password = await bcrypt.hash(update.password, 10); // necessary here, pre-save hook not triggered by findByIdAndUpdate
-        const farmer = await Farmer.findByIdAndUpdate(id, update, { new: true });
+        const { name, phone, address, farmName, farmDescription, latitude, longitude } = req.body;
+        const farmer = await Farmer.findById(id);
         if (!farmer) return res.status(404).json({ message: 'Farmer not found' });
-        res.status(200).json({ message: 'Farmer updated', farmer });
+
+        let images = Array.isArray(farmer.farmImages) ? [...farmer.farmImages] : [];
+        let imagesP = Array.isArray(farmer.farmImagesPublicIds) ? [...farmer.farmImagesPublicIds] : [];
+        let videos = Array.isArray(farmer.farmVideos) ? [...farmer.farmVideos] : [];
+        let videosP = Array.isArray(farmer.farmVideosPublicIds) ? [...farmer.farmVideosPublicIds] : [];
+
+        const removeImages = parseArray(req.body.removeImages);
+        const removeVideos = parseArray(req.body.removeVideos);
+        const imagesOrder = parseArray(req.body.imagesOrder);
+        const videosOrder = parseArray(req.body.videosOrder);
+
+        if (removeImages.length) {
+            const toDeleteIdx = [];
+            images = images.filter((url, idx) => {
+                const keep = !removeImages.includes(url);
+                if (!keep) toDeleteIdx.push(idx);
+                return keep;
+            });
+            for (const idx of toDeleteIdx) {
+                const pid = imagesP[idx];
+                if (pid) deleteAsset(pid, 'image');
+            }
+            imagesP = imagesP.filter((_, idx) => !toDeleteIdx.includes(idx));
+        }
+        if (removeVideos.length) {
+            const toDeleteIdx = [];
+            videos = videos.filter((url, idx) => {
+                const keep = !removeVideos.includes(url);
+                if (!keep) toDeleteIdx.push(idx);
+                return keep;
+            });
+            for (const idx of toDeleteIdx) {
+                const pid = videosP[idx];
+                if (pid) deleteAsset(pid, 'video');
+            }
+            videosP = videosP.filter((_, idx) => !toDeleteIdx.includes(idx));
+        }
+
+        // Append new uploads
+        if (req.files && Array.isArray(req.files.images)) {
+            for (const f of req.files.images) {
+                const url = f.path || f.secure_url;
+                const publicId = f.filename || (f.public_id || undefined);
+                if (url) images.push(url);
+                if (publicId) imagesP.push(publicId);
+            }
+        }
+        if (req.files && Array.isArray(req.files.videos)) {
+            for (const f of req.files.videos) {
+                const url = f.path || f.secure_url;
+                const publicId = f.filename || (f.public_id || undefined);
+                if (url) videos.push(url);
+                if (publicId) videosP.push(publicId);
+            }
+        }
+
+        // Reorder
+        if (imagesOrder.length) {
+            const orderSet = new Set(imagesOrder);
+            const ordered = [];
+            const orderedP = [];
+            const map = new Map(images.map((u, i) => [u, i]));
+            for (const url of imagesOrder) {
+                if (map.has(url)) {
+                    const idx = map.get(url);
+                    ordered.push(images[idx]);
+                    orderedP.push(imagesP[idx]);
+                }
+            }
+            images.forEach((u, i) => { if (!orderSet.has(u)) { ordered.push(u); orderedP.push(imagesP[i]); } });
+            images = ordered; imagesP = orderedP;
+        }
+        if (videosOrder.length) {
+            const orderSet = new Set(videosOrder);
+            const ordered = [];
+            const orderedP = [];
+            const map = new Map(videos.map((u, i) => [u, i]));
+            for (const url of videosOrder) {
+                if (map.has(url)) {
+                    const idx = map.get(url);
+                    ordered.push(videos[idx]);
+                    orderedP.push(videosP[idx]);
+                }
+            }
+            videos.forEach((u, i) => { if (!orderSet.has(u)) { ordered.push(u); orderedP.push(videosP[i]); } });
+            videos = ordered; videosP = orderedP;
+        }
+
+        const update = { name, phone, address, farmName, farmDescription, latitude, longitude };
+        Object.keys(update).forEach(k => update[k] === undefined && delete update[k]);
+        update.farmImages = images;
+        update.farmImagesPublicIds = imagesP;
+        update.farmVideos = videos;
+        update.farmVideosPublicIds = videosP;
+
+        const updated = await Farmer.findByIdAndUpdate(id, update, { new: true });
+        res.status(200).json({ message: 'Farmer updated', farmer: updated });
     } catch (err) {
         logger.error('Error updating farmer', err);
         res.status(500).json({ message: 'Internal server error' });
@@ -57,9 +159,21 @@ exports.updateFarmer = async (req, res) => {
 };
 
 // Admin: delete farmer
-exports.deleteFarmer = async (req, res) => {
+exports.adminDeleteFarmer = async (req, res) => {
     try {
         const { id } = req.params;
+        // Fetch for asset cleanup
+        const doc = await Farmer.findById(id);
+        if (!doc) return res.status(404).json({ message: 'Farmer not found' });
+        // Best-effort delete of media assets
+        try {
+            const imgs = Array.isArray(doc.farmImagesPublicIds) ? doc.farmImagesPublicIds : [];
+            const vids = Array.isArray(doc.farmVideosPublicIds) ? doc.farmVideosPublicIds : [];
+            for (const pid of imgs) { if (pid) await deleteAsset(pid, 'image'); }
+            for (const pid of vids) { if (pid) await deleteAsset(pid, 'video'); }
+        } catch (e) {
+            logger.warn('Farmer asset cleanup failed', e);
+        }
         const deleted = await Farmer.findByIdAndDelete(id);
         if (!deleted) return res.status(404).json({ message: 'Farmer not found' });
         res.status(200).json({ message: 'Farmer deleted' });
@@ -69,49 +183,66 @@ exports.deleteFarmer = async (req, res) => {
     }
 };
 
-// Farmer: get own profile
-exports.getProfile = async (req, res) => {
+// Admin: list and get
+exports.adminListFarmers = async (req, res) => {
     try {
-        const farmerId = req.user.id;
-        const farmer = await Farmer.findById(farmerId).select('-password');
-        if (!farmer) return res.status(404).json({ message: 'Farmer not found' });
-        res.status(200).json(farmer);
+        let { page = 1, limit = 10, q } = req.query;
+        page = parseInt(page, 10) || 1;
+        limit = parseInt(limit, 10) || 10;
+        const query = q ? { $or: [
+            { name: new RegExp(q, 'i') },
+            { farmName: new RegExp(q, 'i') },
+        ] } : {};
+        const [farmers, total] = await Promise.all([
+            Farmer.find(query).skip((page - 1) * limit).limit(limit),
+            Farmer.countDocuments(query)
+        ]);
+        res.status(200).json({ farmers, total, page, totalPages: Math.ceil(total / limit) });
     } catch (err) {
-        logger.error('Error fetching farmer profile', err);
+        logger.error('Error listing farmers', err);
         res.status(500).json({ message: 'Internal server error' });
     }
 };
 
-// Farmer: update own profile (allow farm images/videos via cloudinary)
-exports.updateProfile = async (req, res) => {
+exports.adminGetFarmer = async (req, res) => {
     try {
-        const farmerId = req.user.id;
-        const update = { ...req.body };
-
-        // handle images/videos in req.files if provided
-            if (req.files) {
-                if (req.files.images) {
-                    const saved = [];
-                    for (const f of req.files.images) {
-                        const url = await cloudinaryUpload(f.path);
-                        saved.push(url);
-                    }
-                    update.farmImages = saved;
-                }
-                if (req.files.videos) {
-                    const savedV = [];
-                    for (const f of req.files.videos) {
-                        const url = await cloudinaryUpload(f.path);
-                        savedV.push(url);
-                    }
-                    update.farmVideos = savedV;
-                }
-        }
-
-        const farmer = await Farmer.findByIdAndUpdate(farmerId, update, { new: true }).select('-password');
-        res.status(200).json({ message: 'Profile updated', farmer });
+        const farmer = await Farmer.findById(req.params.id);
+        if (!farmer) return res.status(404).json({ message: 'Farmer not found' });
+        res.status(200).json(farmer);
     } catch (err) {
-        logger.error('Error updating profile', err);
+        logger.error('Error fetching farmer', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+// Public list/get
+exports.listPublicFarmers = async (req, res) => {
+    try {
+        let { page = 1, limit = 10, q } = req.query;
+        page = parseInt(page, 10) || 1;
+        limit = parseInt(limit, 10) || 10;
+        const query = q ? { $or: [
+            { name: new RegExp(q, 'i') },
+            { farmName: new RegExp(q, 'i') },
+        ] } : {};
+        const [farmers, total] = await Promise.all([
+            Farmer.find(query).skip((page - 1) * limit).limit(limit),
+            Farmer.countDocuments(query)
+        ]);
+        res.status(200).json({ farmers, total, page, totalPages: Math.ceil(total / limit) });
+    } catch (err) {
+        logger.error('Error listing public farmers', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+exports.getPublicFarmer = async (req, res) => {
+    try {
+        const farmer = await Farmer.findById(req.params.id);
+        if (!farmer) return res.status(404).json({ message: 'Farmer not found' });
+        res.status(200).json(farmer);
+    } catch (err) {
+        logger.error('Error fetching public farmer', err);
         res.status(500).json({ message: 'Internal server error' });
     }
 };
