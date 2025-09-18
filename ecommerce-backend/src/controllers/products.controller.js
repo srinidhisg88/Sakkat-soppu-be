@@ -72,10 +72,7 @@ exports.createProduct = async (req, res) => {
             } catch (_) {}
         }
 
-        // If the creator is a farmer, associate product with farmerId
-        if (req.user && req.user.role === 'farmer') {
-            productData.farmerId = req.user.id;
-        }
+        // Decoupled: do not associate products with farmerId anymore
 
         const newProduct = new Product(productData);
 
@@ -143,10 +140,7 @@ exports.updateProduct = async (req, res) => {
         const product = await Product.findById(req.params.id);
         if (!product) return res.status(404).json({ message: 'Product not found' });
 
-        // Ownership check
-        if (req.user && req.user.role === 'farmer' && String(product.farmerId) !== String(req.user.id)) {
-            return res.status(403).json({ message: 'Forbidden. Cannot edit another farmer\'s product.' });
-        }
+        // Decoupled: no farmer ownership check
 
         // Parse arrays possibly provided as repeated fields or JSON strings
         const parseArray = (v) => {
@@ -302,9 +296,7 @@ exports.deleteProduct = async (req, res) => {
         const product = await Product.findById(req.params.id);
         if (!product) return res.status(404).json({ message: 'Product not found' });
 
-        if (req.user && req.user.role === 'farmer' && String(product.farmerId) !== String(req.user.id)) {
-            return res.status(403).json({ message: 'Forbidden. Cannot delete another farmer\'s product.' });
-        }
+        // Decoupled: no farmer ownership check
 
         await Product.findByIdAndDelete(req.params.id);
         // Audit

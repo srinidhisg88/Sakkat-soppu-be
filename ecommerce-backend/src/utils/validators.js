@@ -118,15 +118,27 @@ module.exports = {
     validateAdminLogin: validate(loginSchema),
     validateCouponCreate: validate(couponCreateSchema),
     validateCouponUpdate: validate(couponUpdateSchema),
-    validateFarmer: validate(Joi.object({
+    // Farmers: create/update (no credentials), allow media management fields on update
+    validateFarmerCreate: validate(Joi.object({
         name: Joi.string().min(2).required(),
-        email: Joi.string().email().required(),
-        password: Joi.string().min(6).optional(),
         phone: Joi.string().optional(),
         address: Joi.string().optional(),
         farmName: Joi.string().optional(),
         farmDescription: Joi.string().optional(),
         latitude: Joi.number().optional(),
         longitude: Joi.number().optional(),
+    })),
+    validateFarmerUpdate: validate(Joi.object({
+        name: Joi.string().min(2).optional(),
+        phone: Joi.string().optional(),
+        address: Joi.string().optional(),
+        farmName: Joi.string().optional(),
+        farmDescription: Joi.string().optional(),
+        latitude: Joi.number().optional(),
+        longitude: Joi.number().optional(),
+        removeImages: arrayOrJson(Joi.string()),
+        removeVideos: arrayOrJson(Joi.string()),
+        imagesOrder: arrayOrJson(Joi.string()),
+        videosOrder: arrayOrJson(Joi.string()),
     })),
 };
