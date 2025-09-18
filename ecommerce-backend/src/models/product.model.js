@@ -84,7 +84,16 @@ productSchema.virtual('pricePerPiece').get(function () {
 
 // Computed: primary unit label for display
 productSchema.virtual('unitLabel').get(function () {
-    if (typeof this.g === 'number' && this.g > 0) return `${this.g} g`;
+    if (typeof this.g === 'number' && this.g > 0) {
+        const grams = this.g;
+        if (grams >= 1000) {
+            const kg = grams / 1000;
+            // format up to 2 decimals and trim trailing zeros
+            const formatted = (Math.round(kg * 100) / 100).toString();
+            return `${formatted.replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1')} kg`;
+        }
+        return `${grams} g`;
+    }
     if (typeof this.pieces === 'number' && this.pieces > 0) return `${this.pieces} pcs`;
     return null;
 });
