@@ -12,6 +12,7 @@ const farmerRoutes = require('./routes/farmer.routes');
 const cartRoutes = require('./routes/cart.routes');
 const usersRoutes = require('./routes/users.routes');
 const publicRoutes = require('./routes/public.routes');
+const geocodeRoutes = require('./routes/geocode.routes');
 const realtimeRoutes = require('./routes/realtime.routes');
 const categoriesController = require('./controllers/categories.controller');
 const errorMiddleware = require('./middlewares/error.middleware');
@@ -102,6 +103,7 @@ app.use('/api/farmer', farmerRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/public', publicRoutes);
+app.use('/api/proxy', geocodeRoutes);
 app.use('/api/realtime', realtimeRoutes);
 app.get('/api/categories', categoriesController.listPublic);
 

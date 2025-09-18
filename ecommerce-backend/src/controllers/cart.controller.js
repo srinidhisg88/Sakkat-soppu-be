@@ -58,20 +58,22 @@ exports.addToCart = async (req, res) => {
     }
 };
 
-// Remove product from cart
+// Remove product from cart (atomic to avoid version conflicts)
 exports.removeFromCart = async (req, res) => {
     try {
         const userId = req.user.id;
         const { productId } = req.params;
 
-        const user = await User.findById(userId);
-        if (!user) return res.status(404).json({ message: 'User not found' });
+        // Atomic $pull avoids VersionError under concurrent writes
+        const updated = await User.findOneAndUpdate(
+            { _id: userId },
+            { $pull: { cart: { productId } } },
+            { new: true }
+        ).populate('cart.productId');
 
-        user.cart = user.cart.filter(c => String(c.productId) !== String(productId));
-        await user.save();
+        if (!updated) return res.status(404).json({ message: 'User not found' });
 
-        const populated = await User.findById(userId).populate('cart.productId');
-        const cart = (populated.cart || []).map(ci => ({
+        const cart = (updated.cart || []).map(ci => ({
             ...ci.toObject(),
             productId: ci.productId,
             unitLabel: ci.productId?.unitLabel || null,
@@ -100,7 +102,7 @@ exports.clearCart = async (req, res) => {
     }
 };
 
-// Update cart item quantity
+// Update cart item quantity (atomic operations to avoid version conflicts)
 exports.updateCartItem = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -108,39 +110,51 @@ exports.updateCartItem = async (req, res) => {
 
         if (!productId) return res.status(400).json({ message: 'productId is required' });
 
-        const user = await User.findById(userId);
-        if (!user) return res.status(404).json({ message: 'User not found' });
-
-        const item = user.cart.find(c => String(c.productId) === String(productId));
-        if (!item) return res.status(404).json({ message: 'Product not in cart' });
-
-        // If quantity provided, set directly (>=1); else use action inc/dec
+        // Determine update
+        let update;
         if (Number.isInteger(quantity)) {
             const q = Number(quantity);
             if (q <= 0) {
-                // remove item if set to 0 or negative
-                user.cart = user.cart.filter(c => String(c.productId) !== String(productId));
+                // remove item
+                update = { $pull: { cart: { productId } } };
             } else {
-                item.quantity = q;
+                update = { $set: { 'cart.$[elem].quantity': q } };
             }
         } else if (action === 'increment') {
-            item.quantity = Math.max(1, item.quantity + 1);
+            update = { $inc: { 'cart.$[elem].quantity': 1 } };
         } else if (action === 'decrement') {
-            const newQty = item.quantity - 1;
-            if (newQty <= 0) {
-                // remove when decrementing last unit
-                user.cart = user.cart.filter(c => String(c.productId) !== String(productId));
-            } else {
-                item.quantity = newQty;
-            }
+            // We'll post-process: if decremented to <=0, pull it in a second step
+            update = { $inc: { 'cart.$[elem].quantity': -1 } };
         } else {
             return res.status(400).json({ message: 'Provide a valid action (increment|decrement) or quantity' });
         }
 
-        await user.save();
+        const options = {
+            arrayFilters: [{ 'elem.productId': productId }],
+            new: true,
+        };
 
-        const populated = await User.findById(userId).populate('cart.productId');
-        const cart = (populated.cart || []).map(ci => ({
+        let doc;
+        if (update?.$pull) {
+            doc = await User.findOneAndUpdate({ _id: userId }, update, { new: true }).populate('cart.productId');
+        } else {
+            doc = await User.findOneAndUpdate({ _id: userId }, update, options).populate('cart.productId');
+        }
+        if (!doc) return res.status(404).json({ message: 'User not found' });
+
+        // If we decremented, ensure quantity >=1 else remove
+        if (action === 'decrement') {
+            const item = (doc.cart || []).find(c => String(c.productId) === String(productId));
+            if (!item || item.quantity <= 0) {
+                doc = await User.findOneAndUpdate(
+                    { _id: userId },
+                    { $pull: { cart: { productId } } },
+                    { new: true }
+                ).populate('cart.productId');
+            }
+        }
+
+        const cart = (doc.cart || []).map(ci => ({
             ...ci.toObject(),
             productId: ci.productId,
             unitLabel: ci.productId?.unitLabel || null,
