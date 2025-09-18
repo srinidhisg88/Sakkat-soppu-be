@@ -401,6 +401,19 @@ exports.createOrder = async (req, res) => {
     } catch (error) {
         try { await session.abortTransaction(); } catch (_) {}
         session.endSession();
+        const labels = error?.errorLabels;
+        const hasLabel = Array.isArray(labels) ? labels.includes('TransientTransactionError') : (labels && labels.has && labels.has('TransientTransactionError'));
+        const isWriteConflict = (error?.code === 112) || (error?.codeName === 'WriteConflict');
+        if (hasLabel || isWriteConflict) {
+            // Retry up to 3 times with small backoff
+            req._createOrderRetryCount = (req._createOrderRetryCount || 0) + 1;
+            if (req._createOrderRetryCount <= 3) {
+                const delay = 100 * req._createOrderRetryCount + Math.floor(Math.random() * 100);
+                await new Promise(r => setTimeout(r, delay));
+                return exports.createOrder(req, res);
+            }
+            console.error('Order create retries exhausted after transient write conflicts');
+        }
         console.error('Error creating order (partial flow)', error);
         // Handle idempotency race (unique index) gracefully
         if (idempotencyKey && error && error.code === 11000) {
