@@ -55,6 +55,11 @@ exports.getOrderById = async (req, res) => {
             .populate('items.productId', 'name price')
             .lean();
         if (!order) return res.status(404).json({ message: 'Order not found' });
+        // Ensure customerPhone is present: prefer snapshot on order, else fallback to user's phone
+        if (!order.customerPhone || !String(order.customerPhone).trim()) {
+            const fallback = order.userId && order.userId.phone ? order.userId.phone : '';
+            order.customerPhone = fallback;
+        }
         return res.status(200).json(order);
     } catch (error) {
         console.error('Error fetching order by id', error);
@@ -90,6 +95,11 @@ async function buildOrderEmailPayload(order, userDoc) {
                 customerName = u.name || u.email || customerName;
                 customerPhone = u.phone || '';
             }
+        }
+
+        // If order has an explicit customerPhone snapshot, prefer it
+        if (order.customerPhone && typeof order.customerPhone === 'string' && order.customerPhone.trim()) {
+            customerPhone = order.customerPhone.trim();
         }
 
         const items = (order.items || []).map(i => {
@@ -163,7 +173,7 @@ async function buildOrderEmailPayload(order, userDoc) {
 
 // Create a new order with partial-fulfillment, idempotency, and Mongo transaction
 exports.createOrder = async (req, res) => {
-    const { address, latitude, longitude, paymentMode, idempotencyKey, couponCode } = req.body;
+    const { address, latitude, longitude, paymentMode, idempotencyKey, couponCode, phone } = req.body;
     const userId = req.user.id;
 
     const session = await Order.startSession();
@@ -309,9 +319,10 @@ exports.createOrder = async (req, res) => {
             // fallback silently
         }
 
-        const total = Number(((subtotal - discountAmount) + deliveryFee).toFixed(2));
+    const total = Number(((subtotal - discountAmount) + deliveryFee).toFixed(2));
         const resolvedLat = latitude ?? user.latitude ?? null;
         const resolvedLng = longitude ?? user.longitude ?? null;
+    const resolvedPhone = (typeof phone === 'string' && phone.trim()) ? phone.trim() : (user.phone || '');
 
         // Create the order (with idempotencyKey if provided)
         const order = await Order.create([{
@@ -334,6 +345,7 @@ exports.createOrder = async (req, res) => {
             freeDeliveryApplied,
             status: 'pending',
             paymentMode: paymentMode || 'COD',
+            customerPhone: resolvedPhone,
             address,
             latitude: resolvedLat,
             longitude: resolvedLng,
@@ -378,7 +390,7 @@ exports.createOrder = async (req, res) => {
             ? `https://www.google.com/maps/search/?api=1&query=${createdOrder.latitude},${createdOrder.longitude}`
             : null;
 
-        const orderForEmail = await buildOrderEmailPayload(createdOrder, user);
+    const orderForEmail = await buildOrderEmailPayload(createdOrder, user);
 
         (async () => {
             try { await sendOrderConfirmation(user.email, { order: orderForEmail }); } catch (e) { console.error('Email user failed', e); }
@@ -391,7 +403,7 @@ exports.createOrder = async (req, res) => {
                 if (adminPhone) {
                     const { sendSmsToAdmin } = require('../services/sms.service');
                     const portal = 'https://admin.sakkatsoppu.com';
-                    const smsBody = `New order received. ID: ${createdOrder._id}.\nStatus: pending. Visit portal to confirm address: ${portal}`.trim();
+                    const smsBody = `New order received. ID: ${createdOrder._id}.\nStatus: pending. Phone: ${orderForEmail.customerPhone || 'N/A'}.\nVisit portal: ${portal}`.trim();
                     await sendSmsToAdmin(adminPhone, smsBody);
                 }
             } catch (e) { console.error('SMS admin failed', e); }

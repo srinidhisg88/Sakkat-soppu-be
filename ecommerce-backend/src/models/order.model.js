@@ -68,6 +68,12 @@ const orderSchema = new mongoose.Schema({
         enum: ['COD'],
         default: 'COD'
     },
+    // Snapshot of customer phone at checkout time
+    customerPhone: {
+        type: String,
+        required: false,
+        trim: true,
+    },
     address: {
         type: String,
         required: true
