@@ -49,6 +49,7 @@ const orderSchema = Joi.object({
     })).required(),
     totalPrice: Joi.number().positive().required(),
     address: Joi.string().required(),
+    phone: Joi.string().optional(),
     latitude: Joi.number().optional(),
     longitude: Joi.number().optional(),
 });
