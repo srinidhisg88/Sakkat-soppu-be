@@ -98,6 +98,7 @@ const couponUpdateSchema = couponCreateSchema.fork(['code'], (s) => s.optional()
 // Admin signup requires an adminCode to prevent open admin creation
 const adminSignupSchema = signupSchema.keys({
     adminCode: Joi.string().min(6).required(),
+    address: Joi.string().optional(),
 });
 
 const validate = (schema) => (req, res, next) => {
