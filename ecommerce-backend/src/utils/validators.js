@@ -59,7 +59,7 @@ const signupSchema = Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().min(6).required(),
     phone: Joi.string().optional(),
-    address: Joi.string().optional(),
+    address: Joi.string().required(),
     latitude: Joi.number().optional(),
     longitude: Joi.number().optional(),
 });

@@ -75,8 +75,12 @@ const orderSchema = new mongoose.Schema({
         trim: true,
     },
     address: {
-        type: String,
-        required: true
+        houseNo: { type: String, default: '' },
+        landmark: { type: String, default: '' },
+        area: { type: String, default: '' },
+        city: { type: String, default: 'Mysore' },
+        state: { type: String, default: 'Karnataka' },
+        pincode: { type: String, default: '' },
     },
     latitude: {
         type: Number,
