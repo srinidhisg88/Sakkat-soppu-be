@@ -3,6 +3,20 @@ const User = require('../models/user.model');
 const Product = require('../models/product.model');
 const { sendOrderConfirmation, sendNewOrderNotification } = require('../services/email.service');
 
+// Helper to format address object into a string for responses
+function formatAddress(address) {
+    if (typeof address === 'string') return address;
+    if (!address || typeof address !== 'object') return '';
+    const parts = [];
+    if (address.houseNo) parts.push(address.houseNo);
+    if (address.landmark) parts.push(address.landmark);
+    if (address.area) parts.push(address.area);
+    if (address.city) parts.push(address.city);
+    if (address.state) parts.push(address.state);
+    if (address.pincode) parts.push(address.pincode);
+    return parts.join(', ');
+}
+
 // Admin: list all orders with optional filters and pagination
 exports.getAllOrders = async (req, res) => {
     try {
@@ -39,7 +53,9 @@ exports.getAllOrders = async (req, res) => {
             Order.countDocuments(filter),
         ]);
 
-        return res.status(200).json({ data, page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) });
+        const formattedData = data.map(order => ({ ...order, address: formatAddress(order.address) }));
+
+        return res.status(200).json({ data: formattedData, page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) });
     } catch (error) {
         console.error('Error listing all orders', error);
         return res.status(500).json({ message: 'Error fetching orders' });
@@ -60,6 +76,7 @@ exports.getOrderById = async (req, res) => {
             const fallback = order.userId && order.userId.phone ? order.userId.phone : '';
             order.customerPhone = fallback;
         }
+        order.address = formatAddress(order.address);
         return res.status(200).json(order);
     } catch (error) {
         console.error('Error fetching order by id', error);
@@ -442,7 +459,8 @@ exports.getUserOrders = async (req, res) => {
 
     try {
         const orders = await Order.find({ userId }).sort({ createdAt: -1 });
-        res.status(200).json(orders);
+        const formattedOrders = orders.map(order => ({ ...order.toObject(), address: formatAddress(order.address) }));
+        res.status(200).json(formattedOrders);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching orders' });
     }

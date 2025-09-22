@@ -29,7 +29,19 @@ exports.updateProfile = async (req, res) => {
     const updates = {};
     for (const k of allowed) {
       if (Object.prototype.hasOwnProperty.call(req.body, k)) {
-        updates[k] = req.body[k];
+        if (k === 'address') {
+          // Build address object with defaults
+          updates.address = {
+            houseNo: req.body.address.houseNo || '',
+            landmark: req.body.address.landmark || '',
+            area: req.body.address.area || '',
+            city: req.body.address.city || 'Mysore',
+            state: req.body.address.state || 'Karnataka',
+            pincode: req.body.address.pincode || '',
+          };
+        } else {
+          updates[k] = req.body[k];
+        }
       }
     }
 
@@ -54,6 +66,7 @@ exports.updateProfile = async (req, res) => {
       updatedAt: updated.updatedAt,
     });
   } catch (e) {
+    console.log(e)
     return res.status(500).json({ message: 'Error updating profile' });
   }
 };

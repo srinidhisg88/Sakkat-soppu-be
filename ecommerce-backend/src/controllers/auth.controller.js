@@ -20,10 +20,20 @@ const googleClient = (() => {
 // User signup
 exports.signup = async (req, res) => {
     try {
-        const { name, email, password, phone, address, latitude, longitude } = req.body;
+        const { name, email, password, phone, address: area, latitude, longitude } = req.body;
 
         const existing = await User.findOne({ email });
         if (existing) return res.status(409).json({ message: 'Email already in use' });
+
+        // Build address object from area string
+        const address = {
+            houseNo: '',
+            landmark: '',
+            area: area || '',
+            city: 'Mysore',
+            state: 'Karnataka',
+            pincode: '',
+        };
 
         // Important: do NOT pre-hash here; model pre-save hook hashes automatically
         // Prefer device-provided coordinates. Frontend should send latitude & longitude when available.

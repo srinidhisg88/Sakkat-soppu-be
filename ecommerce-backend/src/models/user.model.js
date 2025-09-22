@@ -25,7 +25,12 @@ const userSchema = new mongoose.Schema({
         default: 'user',
     },
     address: {
-        type: String,
+        houseNo: { type: String, default: '' },
+        landmark: { type: String, default: '' },
+        area: { type: String, default: '' },
+        city: { type: String, default: 'Mysore' },
+        state: { type: String, default: 'Karnataka' },
+        pincode: { type: String, default: '' },
     },
     latitude: {
         type: Number,
