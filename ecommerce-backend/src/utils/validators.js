@@ -20,6 +20,7 @@ const productCreateSchema = Joi.object({
     isOrganic: Joi.boolean().optional(),
     g: Joi.number().integer().min(0).optional(),
     pieces: Joi.number().integer().min(0).optional(),
+    litre: Joi.number().min(0).optional(),
 }).xor('category', 'categoryId');
 
 // Update: all fields optional; include media management fields
@@ -34,6 +35,7 @@ const productUpdateSchema = Joi.object({
     isOrganic: Joi.boolean().optional(),
     g: Joi.number().integer().min(0).optional(),
     pieces: Joi.number().integer().min(0).optional(),
+    litre: Joi.number().min(0).optional(),
     // Media management inputs (either repeated fields forming arrays or JSON strings)
     removeImages: arrayOrJson(Joi.string()),
     removeVideos: arrayOrJson(Joi.string()),

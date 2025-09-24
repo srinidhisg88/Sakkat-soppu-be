@@ -241,6 +241,7 @@ exports.createOrder = async (req, res) => {
                 name: updated.name,
                 g: typeof updated.g === 'number' ? updated.g : undefined,
                 pieces: typeof updated.pieces === 'number' ? updated.pieces : undefined,
+                litre: typeof updated.litre === 'number' ? updated.litre : undefined,
                 unitLabel: updated.unitLabel || null,
                 priceForUnitLabel: updated.priceForUnitLabel || null,
             });
@@ -351,6 +352,7 @@ exports.createOrder = async (req, res) => {
                 name: i.name,
                 g: i.g,
                 pieces: i.pieces,
+                litre: i.litre,
                 unitLabel: i.unitLabel,
                 priceForUnitLabel: i.priceForUnitLabel,
             })),

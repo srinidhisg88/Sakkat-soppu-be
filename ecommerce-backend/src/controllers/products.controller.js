@@ -7,9 +7,10 @@ const { handleError } = require('../middlewares/error.middleware');
 exports.createProduct = async (req, res) => {
     try {
     const { name, category, categoryId, price, stock, description, isOrganic } = req.body;
-        // Prefer one of g or pieces; last non-zero wins
+        // Prefer one of g, pieces, or litre; last non-zero wins
         let g = Number(req.body.g || 0) || 0;
         let pieces = Number(req.body.pieces || 0) || 0;
+        let litre = Number(req.body.litre || 0) || 0;
         if (g > 0 && pieces > 0) {
             // keep the last non-zero sent by client
             if (String(req.body.pieces).trim() !== '') { g = 0; }
@@ -18,6 +19,15 @@ exports.createProduct = async (req, res) => {
             pieces = 0;
         } else if (pieces > 0) {
             g = 0;
+        }
+        // Handle litre similarly, but since it's new, allow it alongside or prefer it if set
+        if (litre > 0) {
+            // If litre is set, clear others if they conflict, but for now, allow multiple
+            // To match existing logic, perhaps prefer litre over others
+            if (g > 0 || pieces > 0) {
+                g = 0;
+                pieces = 0;
+            }
         }
 
         let imageUrl = null;
@@ -61,6 +71,7 @@ exports.createProduct = async (req, res) => {
             isOrganic,
             g,
             pieces,
+            litre,
         };
 
         // If categoryId provided, mirror the Category.name into string category
@@ -128,13 +139,18 @@ exports.getProductById = async (req, res) => {
 exports.updateProduct = async (req, res) => {
     try {
     const { name, category, categoryId, price, stock, description, isOrganic } = req.body;
-    // Normalize g/pieces: prefer the last non-zero, zero-out the other
+    // Normalize g/pieces/litre: prefer the last non-zero, zero-out the others
     let g = Number(req.body.g || 0) || 0;
     let pieces = Number(req.body.pieces || 0) || 0;
+    let litre = Number(req.body.litre || 0) || 0;
     if (g > 0 && pieces > 0) {
         if (String(req.body.pieces).trim() !== '') { g = 0; } else { pieces = 0; }
     } else if (g > 0) { pieces = 0; } else if (pieces > 0) { g = 0; }
-    const updateData = { name, category, categoryId, price, stock, description, isOrganic, g, pieces };
+    if (litre > 0) {
+        g = 0;
+        pieces = 0;
+    }
+    const updateData = { name, category, categoryId, price, stock, description, isOrganic, g, pieces, litre };
 
         // Load product for media editing
         const product = await Product.findById(req.params.id);
