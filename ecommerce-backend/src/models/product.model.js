@@ -32,6 +32,11 @@ const productSchema = new mongoose.Schema({
         required: false,
         min: 0,
     },
+    litre: {
+        type: Number,
+        required: false,
+        min: 0,
+    },
     stock: {
         type: Number,
         required: true,

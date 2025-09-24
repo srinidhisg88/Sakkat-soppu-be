@@ -25,6 +25,7 @@ const orderSchema = new mongoose.Schema({
     name: { type: String },
     g: { type: Number },
     pieces: { type: Number },
+    litre: { type: Number },
     unitLabel: { type: String },
     priceForUnitLabel: { type: String }
     }],
