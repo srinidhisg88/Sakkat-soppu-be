@@ -318,3 +318,44 @@ exports.deleteProduct = async (req, res) => {
         handleError(res, error);
     }
 };
+
+// Get products by category with pagination (public API)
+exports.getProductsByCategory = async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        let { page = 1, limit = 10 } = req.query;
+
+        page = parseInt(page, 10) || 1;
+        limit = parseInt(limit, 10) || 10;
+
+        // Validate category exists
+        const Category = require('../models/category.model');
+        const category = await Category.findById(categoryId);
+        if (!category) {
+            return res.status(404).json({ message: 'Category not found' });
+        }
+
+        const query = { categoryId };
+
+        const [products, total] = await Promise.all([
+            Product.find(query)
+                .skip((page - 1) * limit)
+                .limit(limit),
+            Product.countDocuments(query)
+        ]);
+
+        res.status(200).json({
+            products,
+            category: {
+                id: category._id,
+                name: category.name,
+                slug: category.slug
+            },
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        });
+    } catch (error) {
+        handleError(res, error);
+    }
+};
