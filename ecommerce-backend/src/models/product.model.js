@@ -89,6 +89,14 @@ productSchema.virtual('pricePerPiece').get(function () {
 
 // Computed: primary unit label for display
 productSchema.virtual('unitLabel').get(function () {
+    if (typeof this.litre === 'number' && this.litre > 0) {
+        const litres = this.litre;
+        if (litres === 1) {
+            return '1 litre';
+        } else {
+            return `${litres} litres`;
+        }
+    }
     if (typeof this.g === 'number' && this.g > 0) {
         const grams = this.g;
         if (grams >= 1000) {
