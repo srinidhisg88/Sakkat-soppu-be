@@ -91,8 +91,8 @@ productSchema.virtual('pricePerPiece').get(function () {
 productSchema.virtual('unitLabel').get(function () {
     if (typeof this.litre === 'number' && this.litre > 0) {
         const litres = this.litre;
-        if (litres === 1) {
-            return '1 litre';
+        if (litres <= 1) {
+            return `${litres} litre`;
         } else {
             return `${litres} litres`;
         }
