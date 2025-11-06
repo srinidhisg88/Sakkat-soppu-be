@@ -3,7 +3,6 @@ const router = express.Router();
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const { cloudinary } = require('../services/cloudinary.service');
-
 // Configure Cloudinary storage for homepage videos
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
@@ -23,14 +22,16 @@ const upload = multer({
 });
 
 const homeVideosController = require('../controllers/homeVideos.controller');
-const roleMiddleware = require('../middlewares/role.middleware');
+const auth = require('../middlewares/auth.middleware');
+const adminMiddleware = require('../middlewares/admin.middleware');
 
 // List all videos (admin view)
-router.get('/', roleMiddleware(['admin']), homeVideosController.listVideos);
+router.get('/', auth.authenticate, adminMiddleware, homeVideosController.listVideos);
 
 // Add new video
-router.post('/',
-    roleMiddleware(['admin']),
+router.post('/' ,
+    auth.authenticate,
+    adminMiddleware,
     upload.fields([
         { name: 'video', maxCount: 1 }
     ]),
@@ -38,12 +39,12 @@ router.post('/',
 );
 
 // Update video details
-router.put('/:id', roleMiddleware(['admin']), homeVideosController.updateVideo);
+router.put('/:id' , auth.authenticate, adminMiddleware, homeVideosController.updateVideo);
 
 // Delete video
-router.delete('/:id', roleMiddleware(['admin']), homeVideosController.deleteVideo);
+router.delete('/:id' , auth.authenticate, adminMiddleware, homeVideosController.deleteVideo);
 
 // Reorder videos
-router.post('/reorder', roleMiddleware(['admin']), homeVideosController.reorderVideos);
+router.post('/reorder', auth.authenticate, adminMiddleware, homeVideosController.reorderVideos);
 
 module.exports = router;
