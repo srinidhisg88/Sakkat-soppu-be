@@ -14,6 +14,7 @@ const usersRoutes = require('./routes/users.routes');
 const publicRoutes = require('./routes/public.routes');
 const geocodeRoutes = require('./routes/geocode.routes');
 const realtimeRoutes = require('./routes/realtime.routes');
+const homeVideosRoutes = require('./routes/homeVideos.routes');
 const categoriesController = require('./controllers/categories.controller');
 const errorMiddleware = require('./middlewares/error.middleware');
 require('dotenv').config();
@@ -105,6 +106,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/proxy', geocodeRoutes);
 app.use('/api/realtime', realtimeRoutes);
+app.use('/api/admin/homepage-videos', homeVideosRoutes);
 app.get('/api/categories', categoriesController.listPublic);
 
 // Error handling middleware
