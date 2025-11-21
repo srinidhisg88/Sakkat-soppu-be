@@ -39,6 +39,8 @@ router.delete('/categories/:id', categoriesController.remove);
 // Delivery settings
 router.get('/delivery-settings', settingsController.getDeliverySettings);
 router.put('/delivery-settings', settingsController.updateDeliverySettings);
+router.put('/delivery-settings/cities/:cityName', settingsController.updateCityDeliverySettings);
+router.delete('/delivery-settings/cities/:cityName', settingsController.deleteCityDeliverySettings);
 
 // Manage user roles
 router.put('/users/:id/role', adminController.updateUserRole);
