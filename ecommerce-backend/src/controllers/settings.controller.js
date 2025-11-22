@@ -135,8 +135,11 @@ exports.deleteCityDeliverySettings = async (req, res) => {
 exports.getPublicDeliverySettings = async (req, res) => {
   try {
     const cfg = await DeliveryConfig.getOrDefaults();
-    const { enabled = true, minOrderSubtotal = 0, cities = [] } = cfg;
-    return res.status(200).json({ enabled, minOrderSubtotal, cities });
+    return res.status(200).json({
+      enabled: cfg.enabled !== undefined ? cfg.enabled : true,
+      minOrderSubtotal: cfg.minOrderSubtotal !== undefined ? cfg.minOrderSubtotal : 0,
+      cities: cfg.cities || []
+    });
   } catch (e) {
     return res.status(500).json({ message: 'Failed to fetch settings' });
   }

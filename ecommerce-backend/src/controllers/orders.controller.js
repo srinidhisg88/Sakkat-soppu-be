@@ -323,18 +323,64 @@ exports.createOrder = async (req, res) => {
 
     // (Minimum order already enforced above before coupon/fee)
 
-        // Delivery fee
+        // Calculate total "weight units" from fulfilled items
+        // Each product's unit (g/pieces/litre) represents 1 base unit for delivery calculation
+        // Total units = sum of (quantity ordered) for all items
+        // This treats each cart item quantity as the delivery weight unit
+        const totalWeight = fulfilledItems.reduce((sum, item) => {
+            // Each item's quantity represents delivery units
+            // 1 qty of any product = 1 unit for delivery fee calculation
+            return sum + (item.quantity || 0);
+        }, 0);
+
+        // Extract city from address
+        const deliveryCity = (address && address.city) ? address.city.trim() : '';
+
+        // Delivery fee calculation using city-based weight pricing
         let deliveryFee = 0;
         let freeDeliveryApplied = false;
+        let deliveryError = null;
+
+        if (!deliveryCity) {
+            // If no city provided, abort the order
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({
+                message: 'Delivery city is required in address',
+                itemsOutOfStock: outOfStock
+            });
+        }
+
         try {
-            const DeliveryConfig = require('../models/deliveryConfig.model');
-            const { computeDeliveryFee } = require('../utils/delivery');
-            const cfg = await DeliveryConfig.getOrDefaults();
-            const calc = computeDeliveryFee(subtotal - discountAmount, cfg);
+            const { computeCityBasedDeliveryFee } = require('../utils/delivery');
+            const calc = await computeCityBasedDeliveryFee(
+                deliveryCity,
+                totalWeight,
+                subtotal - discountAmount
+            );
+
+            if (!calc.success) {
+                // City not supported or delivery disabled
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    message: calc.error || 'Delivery not available for your city',
+                    reason: 'DELIVERY_NOT_AVAILABLE',
+                    city: deliveryCity,
+                    itemsOutOfStock: outOfStock
+                });
+            }
+
             deliveryFee = calc.deliveryFee || 0;
             freeDeliveryApplied = !!calc.freeDeliveryApplied;
         } catch (e) {
-            // fallback silently
+            console.error('Delivery fee calculation failed', e);
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(500).json({
+                message: 'Failed to calculate delivery fee',
+                itemsOutOfStock: outOfStock
+            });
         }
 
     const total = Number(((subtotal - discountAmount) + deliveryFee).toFixed(2));
