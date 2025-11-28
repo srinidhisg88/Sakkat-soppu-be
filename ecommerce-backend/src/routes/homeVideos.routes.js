@@ -10,14 +10,16 @@ const storage = new CloudinaryStorage({
         folder: 'homepage_videos',  // Separate folder for homepage videos
         resource_type: 'video',
         allowed_formats: ['mp4', 'mov', 'webm'],  // Common web-compatible formats
-        timeout: 600000  // 10 minutes for larger video files
+        timeout: 600000,  // 10 minutes for larger video files
+        chunk_size: 6000000  // 6MB chunks for large file uploads
     }
 });
 
 const upload = multer({
     storage,
     limits: {
-        fileSize: 500 * 1024 * 1024  // 500MB limit
+        fileSize: 500 * 1024 * 1024,  // 500MB limit
+        fieldSize: 500 * 1024 * 1024  // 500MB field size limit
     }
 });
 
@@ -28,13 +30,19 @@ const adminMiddleware = require('../middlewares/admin.middleware');
 // List all videos (admin view)
 router.get('/', auth.authenticate, adminMiddleware, homeVideosController.listVideos);
 
-// Add new video
+// Add new video (supports both file upload and Cloudinary URL)
 router.post('/' ,
     auth.authenticate,
     adminMiddleware,
-    upload.fields([
-        { name: 'video', maxCount: 1 }
-    ]),
+    (req, res, next) => {
+        // If request has JSON content-type (Cloudinary URL approach), skip multer
+        const contentType = req.get('Content-Type') || '';
+        if (contentType.includes('application/json')) {
+            return next();
+        }
+        // Otherwise, use multer for file upload
+        upload.fields([{ name: 'video', maxCount: 1 }])(req, res, next);
+    },
     homeVideosController.addVideo
 );
 
