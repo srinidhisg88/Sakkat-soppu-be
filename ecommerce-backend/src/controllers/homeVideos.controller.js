@@ -16,19 +16,28 @@ exports.listVideos = async (req, res) => {
     }
 };
 
-// Add new home video
+// Add new home video (supports both direct upload and Cloudinary URL)
 exports.addVideo = async (req, res) => {
     try {
-        const { title } = req.body;
+        const { title, videoUrl, videoPublicId } = req.body;
 
-        // Handle video upload
-        if (!req.files || !req.files.video) {
-            return res.status(400).json({ message: 'Video file is required' });
+        let finalVideoUrl = videoUrl;
+        let finalPublicId = videoPublicId;
+
+        // Check if video was uploaded via multer (traditional way)
+        if (req.files && req.files.video && req.files.video[0]) {
+            const videoFile = req.files.video[0];
+            if (videoFile.path) {
+                finalVideoUrl = videoFile.path;
+                finalPublicId = videoFile.filename;
+            }
         }
 
-        const videoFile = req.files.video[0];
-        if (!videoFile.path) {
-            return res.status(400).json({ message: 'Video upload failed' });
+        // Validate that we have a video URL (either from body or upload)
+        if (!finalVideoUrl) {
+            return res.status(400).json({
+                message: 'Video is required. Provide either videoUrl or upload a file.'
+            });
         }
 
         // Get the highest displayOrder
@@ -36,13 +45,13 @@ exports.addVideo = async (req, res) => {
             .sort('-displayOrder')
             .select('displayOrder')
             .lean();
-        
+
         const displayOrder = lastVideo ? lastVideo.displayOrder + 1 : 0;
 
         const newVideo = new HomeVideo({
             title: title || '',
-            videoUrl: videoFile.path,
-            videoPublicId: videoFile.filename,
+            videoUrl: finalVideoUrl,
+            videoPublicId: finalPublicId || null,
             displayOrder
         });
 
